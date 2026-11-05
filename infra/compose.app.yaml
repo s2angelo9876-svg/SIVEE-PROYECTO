@@ -1,0 +1,23 @@
+# Merge with compose.demo.yaml after running pnpm setup:demo.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    environment:
+      NODE_ENV: production
+      SIVEE_ENV: demo
+      PORT: 5000
+      WEB_ORIGIN: http://localhost:8080
+      DATABASE_URL: ${CONTAINER_DATABASE_URL:?Provide the restricted app URL with host db}
+      DNI_LOOKUP_KEY: ${DNI_LOOKUP_KEY}
+      SESSION_PEPPER: ${SESSION_PEPPER}
+      CSRF_KEY: ${CSRF_KEY}
+      COOKIE_SECURE: "false"
+      ALLOW_DEMO_RESET: "true"
+    ports:
+      - "127.0.0.1:8080:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped

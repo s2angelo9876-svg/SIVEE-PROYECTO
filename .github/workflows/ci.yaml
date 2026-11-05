@@ -1,0 +1,62 @@
+name: SIVEE validation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_DB: sivee_demo
+          POSTGRES_USER: sivee_owner
+          POSTGRES_PASSWORD: ci-ephemeral-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sivee_owner -d sivee_demo"
+          --health-interval 5s --health-timeout 3s --health-retries 15
+    env:
+      SIVEE_ENV: demo
+      WEB_ORIGIN: http://localhost:5173
+      DATABASE_URL: postgresql://sivee_app:ci-app-ephemeral-only@127.0.0.1:5432/sivee_demo
+      MIGRATION_DATABASE_URL: postgresql://sivee_owner:ci-ephemeral-only@127.0.0.1:5432/sivee_demo
+      DNI_LOOKUP_KEY: ci-only-dni-lookup-key-not-for-production-2026
+      SESSION_PEPPER: ci-only-session-key-not-for-production-2026
+      CSRF_KEY: ci-only-csrf-key-not-for-production-2026
+      COOKIE_SECURE: "false"
+      ALLOW_DEMO_RESET: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm lint && pnpm typecheck && pnpm test:unit
+      - run: pnpm test:integration
+      - run: pnpm db:migrate && pnpm seed:demo && pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Browser tests
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          pnpm dev > artifacts/dev.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --fail --silent http://localhost:5173/api/v1/health/ready; then break; fi
+            sleep 1
+          done
+          export CHROMIUM_PATH="$(node --input-type=module -e 'import {chromium} from "@playwright/test"; process.stdout.write(chromium.executablePath())')"
+          pnpm test:e2e
+          pnpm exec tsx scripts/accessibility-check.ts
+      - run: pnpm audit --audit-level moderate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sivee-validation
+          path: |
+            artifacts/
+            playwright-report/

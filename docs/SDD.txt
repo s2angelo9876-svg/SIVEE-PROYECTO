@@ -1,0 +1,3011 @@
+                                                                                               SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+
+SDD — SIVEE: Sistema de Votación Electrónica Escolar
+Documento de Diseño de Software — Versión 1.0
+Fecha de emisión: jueves 5 de noviembre de 2026
+Estado documental: propuesta técnica para revisión y aprobación institucional
+Hito del MVP: viernes 6 de noviembre de 2026 (simulación con docentes)
+Tecnologías: React + Vite, TypeScript, Tailwind CSS, Node.js + Express, PostgreSQL, Prisma, SSE
+Tipo de elección: elección de Directiva del Municipio Escolar — institución educativa peruana
+Clasificación: uso interno; contiene diseño de seguridad, pero NO incorpora datos personales reales
+Responsables de aprobación: Dirección, Comité Electoral y responsable institucional de protección de datos
+Alcance de esta entrega: especificación detallada, no certificación ni implementación ya terminada.
+      Advertencia de alcance. Un MVP funcionando en una simulación NO equivale a un sistema validado para una elección oficial. La
+      Dirección y el Comité Electoral deben aprobar el procedimiento, su equivalencia operativa con el proceso previsto por la
+      normativa aplicable y el tratamiento de datos personales. El sistema no reemplaza por sí solo las funciones del Comité Electoral,
+      miembros de mesa ni personeros.
+
+
+
+
+0. Control documental
+Campo                                                                 Valor
+
+Código                                                               SIVEE-SDD-001
+
+Versión                                                              1.0
+
+Fecha                                                                05/11/2026
+
+Autoría                                                              Diseño técnico asistido para el equipo implementador
+
+Estado                                                               En revisión
+
+Fase                                                                 MVP de simulación → validación → elección oficial
+
+Enfoque                                                              Seguridad e integridad primero; UI accesible; resultados restringidos
+
+Ambiente                                                             demo, staging, production aislados
+
+Supuesto operativo                                                   Una institución; una o varias elecciones configurables por nivel/turno
+
+Dependencias                                                         Padrón autorizado, listas aprobadas, reglamento electoral, infraestructura
+
+
+
+
+0.1 Historial de versiones
+Versión                                        Fecha                                            Cambios
+
+                                                                                               Diseño inicial integral: requisitos, arquitectura,
+1.0                                            05/11/2026
+                                                                                               datos, API, seguridad, UX, pruebas y despliegue
+
+
+
+
+0.2 Lectura rápida / mapa de secciones
+1. Resumen ejecutivo y objetivos.
+2. Contexto normativo y supuestos institucionales.
+3. Alcance, límites y entregables.
+4. Interesados, roles y casos de uso.
+5. Requisitos funcionales y no funcionales.
+6. Decisiones arquitectónicas y diagramas.
+7. Estructura del repositorio y convenciones.
+8. Dominio, modelo de datos y restricciones.
+9. Reglas electorales y máquinas de estado.
+10. Flujos y protocolo de votación.
+11. Contratos API REST y eventos.
+12. Autenticación, autorización, privacidad y amenazas.
+13. Diseño UX/UI por pantalla.
+14. Algoritmo de escrutinio y cierre.
+
+
+                                                                                                               SDD v1.0 | 05/11/2026 • Página 1
+                                                                                            SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+15. Verificación de integridad y auditoría.
+16. Estrategia de pruebas.
+17. Despliegue e infraestructura.
+18. Operaciones, incidentes y continuidad.
+19. Cronograma priorizado para la simulación.
+20. Riesgos, decisiones pendientes y criterios de aceptación.
+21. Anexos: CSV, SQL, ejemplo de transacción, variables y checklist.
+22. Referencias y trazabilidad.
+
+
+
+
+1. Resumen ejecutivo
+SIVEE es una aplicación web diseñada para administrar elecciones escolares con identificación del elector en un padrón previamente
+aprobado, presentación de listas participantes, voto válido/blanco/nulo, registro único por elector y agregación automática de
+resultados. El responsable electoral tendrá un tablero restringido que mostrará progreso de participación durante la jornada y
+resultados por preferencia únicamente después del cierre autorizado de todos los turnos correspondientes.
+Valor principal: eliminar conteos manuales en la simulación, reducir errores aritméticos, registrar la participación y facilitar reportes
+auditables sin exponer las preferencias individuales.
+Condiciones irrenunciables: autenticación adicional al DNI, una participación por elección, transacciones atómicas, separación
+persistente entre identidad y papeleta, ningún resultado parcial de preferencias visible antes del cierre, control de accesos y
+recuperación ante errores.
+
+1.1 Objetivo general
+Diseñar y construir una solución web que permita realizar una simulación reproducible de votación electrónica escolar y que pueda
+evolucionar a un uso oficial solo después de validación normativa, organizativa, de seguridad, de privacidad y de operación.
+
+1.2 Objetivos específicos
+    Registrar un padrón de estudiantes con validación previa e importación por lotes.
+    Mostrar al estudiante identificado su nombre, grado, sección y turno sin exponer información del resto del padrón.
+    Mostrar de dos a cuatro listas electorales aprobadas, con símbolo, identificación y candidatura, más voto en blanco y voto nulo
+      cuando el Comité autorice estas opciones digitales.
+    Permitir revisar y confirmar una sola selección, enviando el resultado en una transacción indivisible.
+    Prohibir votos adicionales para una misma persona y elección incluso ante solicitudes simultáneas.
+    Mantener el secreto práctico del voto frente a usuarios de la aplicación y operadores ordinarios.
+    Contabilizar votos en tiempo real en el servidor, ocultando resultados de preferencias hasta el cierre.
+    Gestionar turnos mañana/tarde, pausas y cierre irreversible sin borrado de votos.
+    Producir actas y conciliaciones de votos válidos, blancos, nulos, electores habilitados, participantes y abstenciones.
+    Ofrecer evidencias de seguridad y pruebas antes del piloto institucional.
+
+1.3 Métricas de éxito propuestas
+Métrica                                          Objetivo MVP                               Criterio de producción
+
+Votos duplicados aceptados                       0 en pruebas                               0, verificado con concurrencia
+
+Pérdida de votos confirmados                     0 en pruebas                               0 en fallos simulados
+
+Diferencia entre votos y
+                                                 0                                          0 y acta de conciliación
+participaciones=VOTÓ
+
+Revelación de resultados antes del cierre        0                                          0 con pruebas de privilegios y endpoints
+
+Inclusión indebida de datos personales en logs   0                                          0 tras revisión de logs
+
+95.º percentil de emisión en carga objetivo      <3 s en infraestructura de prueba          Acordado tras prueba en red real
+
+                                                                                            Objetivo ≥99,5 % durante ventana electoral, sujeto
+Disponibilidad operativa                         Simulación de una jornada
+                                                                                            a infraestructura
+
+Recuperación posterior a fallo                   No duplicar ni perder votos confirmados    Plan de contingencia probado
+
+
+Los tiempos y tasas de esta sección son objetivos propuestos que deben medirse; no resultados ya alcanzados.
+
+
+
+
+                                                                                                            SDD v1.0 | 05/11/2026 • Página 2
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+2. Contexto normativo y gobernanza
+2.1 Referencias de aplicación
+   RVM N.º 046-2025-MINEDU, norma técnica de organización y funcionamiento de Municipios Escolares. Fuente:
+     https://www.gob.pe/institucion/minedu/normas-legales/6760396-046-2025-minedu
+   Orientaciones MINEDU 2026, material de apoyo al proceso electoral. Fuente:
+     https://www.gob.pe/institucion/minedu/campa%C3%B1as/63346-municipio-escolar
+   Ley N.º 29733 y D. S. N.º 016-2024-JUS, Reglamento de Protección de Datos Personales, vigente desde el 31/03/2025. Fuentes:
+     https://www.gob.pe/institucion/anpd/normas-legales/6554453-n-016-2024-jus y
+     https://www.gob.pe/institucion/anpd/campa%C3%B1as/128319-nuevo-reglamento-de-proteccion-de-datos-personales
+   OWASP ASVS 5.0, marco técnico de controles de autenticación, sesión y registro seguro. https://asvs.owasp.org/
+   Node.js Release Schedule, usar rama LTS compatible, sin fijar versiones EOL. https://nodejs.org/en/about/previous-releases
+
+2.2 Restricciones de carácter institucional
+   La normativa establece en su proceso electoral un mínimo de dos y un máximo de cuatro listas. SIVEE validará ese rango al
+     pasar a estado PREPARADA. Para ensayos unitarios podrán existir fixtures con menos listas, nunca elecciones preparadas para
+     operar.
+   El proceso señalado por MINEDU contempla entrega de cédula física, mesa de votación, ánfora, firma/huella y escrutinio por
+     miembros de mesa. SIVEE no debe afirmar ser equivalente ni sustituto automático de dicho proceso. Requiere revisión
+     institucional y, cuando corresponda, consulta a autoridad educativa competente.
+   El Comité Electoral conserva el control del reglamento, padrón, elegibilidad, habilitación, incidencias, escrutinio y
+     proclamación.
+   La propuesta de un botón explícito “Voto nulo” es una decisión UX que el Comité debe autorizar/documentar. En una elección
+     física la nulidad suele derivarse de una marca irregular; la equivalencia procedimental no debe presumirse.
+   Para elecciones consolidadas mañana/tarde, el Comité debe aprobar su configuración; no se debe asumir que ambos turnos
+     votan por el mismo municipio.
+   Tratándose de menores, la institución determinará finalidad, base jurídica, información a familias/estudiantes, controles de
+     acceso, tiempo de conservación y eventual transferencia internacional a servicios de nube.
+   La plataforma no publicará DNI, nombres del padrón ni participación nominativa a visitantes.
+
+2.3 Documento institucional previo a elecciones oficiales
+Expediente mínimo que debe quedar aprobado: (a) modalidad autorizada; (b) padrón y mecanismo de autenticación; (c) lista de
+elecciones/turnos; (d) personas con roles; (e) reglas de blanco/nulo; (f) procedimiento de apertura/cierre; (g) contingencia; (h)
+manejo de datos personales; (i) acta de pruebas y acta de validación; (j) procedimiento de proclamación.
+
+
+
+
+3. Alcance y exclusiones
+3.1 Incluido en MVP del viernes 06/11
+P0 — imprescindible: proyecto web con datos ficticios; importación CSV; 2–4 listas; DNI de prueba + código de prueba; ficha
+confirmatoria; voto válido/blanco/nulo; exclusión de doble voto; separación de registros; dos turnos; dashboard protegido que
+muestre participación antes del cierre y escrutinio después; estados de elección; reconciliación; pruebas unitarias/integración
+fundamentales.
+P1 — importante si P0 está estable: descarga de acta PDF, exportación CSV de agregados, filtros por turno permitidos, auditoría
+administrativa, accesibilidad básica, reinicio de simulación controlado, healthcheck, prueba de carga.
+
+3.2 Incluido en etapa de preparación oficial
+MFA del personal designado, autorización institucional documentada, hardening HTTP/TLS, backup y restauración, revisión de
+privacidad, entrenamiento de responsables, pruebas de red/equipos y plan de contingencia, validación de accesibilidad y auditoría
+independiente.
+
+3.3 Fuera de alcance inicial
+   Integración directa con RENIEC u otras bases nacionales.
+   Biometría o almacenamiento de huellas dactilares.
+   Aplicación móvil nativa; se ofrece web responsive.
+   Conteo público en vivo de listas antes del cierre.
+
+
+                                                                                                       SDD v1.0 | 05/11/2026 • Página 3
+                                                                                                             SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+    Modificar o borrar votos depositados.
+    Análisis predictivo de preferencias o segmentación personal.
+    Autenticación mediante DNI solo para producción.
+    Garantía de voto secreto criptográficamente verificable de extremo a extremo (E2E) en el MVP.
+    Despliegue en servicios gratuitos no persistentes para la elección oficial.
+    Sustitución automática de actas o responsabilidades previstas por MINEDU.
+
+
+
+
+4. Interesados, roles y casos de uso
+4.1 Actores
+Actor                                            Responsabilidad                                             Privilegios
+
+Estudiante elector                               Identificarse, revisar y emitir su voto                     Solo la propia sesión
+
+                                                 Acompañar incidencias no vinculadas al voto;
+Personal de mesa autorizado                                                                                  Operaciones limitadas sin ver preferencias
+                                                 verificar identidad
+
+Docente observador                               Supervisar participación y consultar acta tras cierre Lectura y solo resultados autorizados
+
+                                                 Aprobar candidatos, padrón y transiciones; firmar
+Comité Electoral / autoridad de cierre                                                                       Acciones duales sensibles
+                                                 actas
+
+Administrador técnico                            Configurar infraestructura y restauración                   Sin acceso lógico a preferencias individuales
+
+Dirección                                        Autorizar modalidad y designar responsables                 Aprobación institucional
+
+Auditor / personero acreditado                   Revisar proceso y consistencia de resultados                Exportaciones agregadas tras cierre
+
+
+Separación de funciones: por política, una sola cuenta no podrá preparar, abrir, cerrar y publicar sin verificaciones adicionales
+cuando se opere en producción. Para el MVP se permite un demo-admin solamente con datos ficticios.
+
+4.2 Matriz RBAC base
+Acción                  ELECTOR          MESA                    OBSERVADOR                OPERADOR                  COMITE                 ADMIN_TECNICO
+
+Consulta de propia
+                        Sí               No                      No                        No                       No                      No
+identidad
+
+Emitir su voto          Sí               No                      No                        No                       No                      No
+
+Consultar estado
+                                         Con acreditación
+personal votó/no        Sí                                       No                        Sí                       Sí                      No
+                                         limitada
+votó
+
+Cargar padrón           No               No                      No                        Sí                       Autoriza                No
+
+Cargar listas           No               No                      No                        Sí                       Autoriza                No
+
+Abrir/pausar turno      No               No                      No                        Solicita                 Aprueba                 No
+
+Ver participación
+                        No               Restringido             Sí                        Sí                       Sí                      No
+agregada
+
+Ver preferencias
+                        No               No                      No                        No                       No                      No
+antes del cierre
+
+Ver resultados al
+                        No               No                      Sí si designado           Sí si designado          Sí                      No
+cierre
+
+Descargar acta
+                        No               No                      Sí si designado           Sí                       Sí                      No
+consolidada
+
+Gestionar
+                        No               No                      No                        No                       No                      Sí
+credenciales admin
+
+Leer voto ligado a
+                        Nadie            Nadie                   Nadie                     Nadie                    Nadie                   Nadie
+identidad
+
+
+Los privilegios para personas físicas se asignan por institution_id, election_id y scope, nunca solo con una comprobación superficial
+del rol.
+
+
+
+
+                                                                                                                             SDD v1.0 | 05/11/2026 • Página 4
+                                                                                                     SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+4.3 Casos de uso
+ID                   Caso                               Actor                             Precondiciones                  Postcondiciones
+
+                                                                                         Elección DRAFT, archivo          Electores consistentes, sin
+CU-01               Importar padrón                     Operador
+                                                                                         válido                           duplicados
+
+CU-02               Registrar listas                    Operador/Comité                  DRAFT                            2–4 listas antes de preparar
+
+CU-03               Identificar estudiante              Elector                          DNI y segundo factor válidos     Sesión electoral temporal
+
+                                                                                         Turno abierto, elegible, no
+CU-04               Obtener cédula                      Elector                                                           Opciones disponibles
+                                                                                         votó
+
+                                                                                         Identificación válida, voto no
+CU-05               Emitir voto                         Elector                                                           Único voto persistido
+                                                                                         registrado
+
+CU-06               Consultar participación             Autorizado                       Sesión + permiso                 Agregados sin preferencias
+
+                                                                                                                          Ventana cambiada
+CU-07               Pausar/reanudar                     Comité                           Estado habilitado
+                                                                                                                          auditadamente
+
+                                                                                         Turnos finalizados, doble
+CU-08               Cerrar definitivamente              Comité                                                            Sin nuevas emisiones
+                                                                                         aprobación
+
+CU-09               Conciliar escrutinio                Comité                           Cierre definitivo                Totales verificados
+
+                                                                                         Conciliación exitosa +           Resultados accesibles a
+CU-10               Publicar tablero final              Comité
+                                                                                         autorización                     autorizados
+
+                                                                                                                          PDF/CSV agregados
+CU-11               Exportar acta                       Comité                           Publicado
+                                                                                                                          verificables
+
+CU-12               Registrar incidente                 Mesa                             Incidente declarado              Trazabilidad sin preferencias
+
+
+
+
+5. Requisitos funcionales (RF)
+5.1 Institución, padrón y elecciones
+ID                                           Descripción comprobable                                 Prioridad
+
+                                             El sistema permitirá registrar institución, año,
+RF-001                                                                                               P0
+                                             nombre y ámbito de la elección.
+
+                                             Permitirá configurar una elección por turno o una
+RF-002                                                                                               P0
+                                             elección conjunta con dos ventanas.
+
+                                             Admitirá importación CSV UTF-8 de padrón con
+RF-003                                                                                               P0
+                                             vista previa, errores por fila y confirmación.
+
+                                             Rechazará duplicidad de DNI dentro del padrón
+RF-004                                                                                               P0
+                                             institucional y dentro de una elección.
+
+                                             Exigirá validar grado, sección, turno y estado de
+RF-005                                                                                               P0
+                                             elegibilidad.
+
+                                             Permitirá activar/desactivar electores solo antes
+RF-006                                                                                               P1
+                                             de la apertura, con auditoría.
+
+                                             Permitirá 2–4 listas con identificación, símbolos y
+RF-007                                                                                               P0
+                                             candidatos aprobados.
+
+                                             Bloqueará cambios de listas y padrón tras el inicio,
+RF-008                                       salvo procedimiento extraordinario documentado          P0
+                                             sin alterar votos.
+
+                                             Mantendrá separadas elecciones DEMO y OFICIAL
+RF-009                                                                                               P0
+                                             y sus bases de datos/credenciales.
+
+                                             Expondrá un resumen de preparación y
+RF-010                                                                                               P0
+                                             advertencias antes de abrir.
+
+
+
+
+5.2 Autenticación y votación
+ID                                           Descripción comprobable                                 Prioridad
+
+                                             El elector ingresará DNI válido de 8 dígitos para el
+RF-011                                                                                               P0
+                                             flujo estándar peruano.
+
+
+
+                                                                                                                     SDD v1.0 | 05/11/2026 • Página 5
+                                                                                  SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+ID                         Descripción comprobable                                Prioridad
+
+                           Validará segundo factor (código individual o
+RF-012                                                                            P0
+                           verificación presencial habilitante).
+
+                           La respuesta de inicio no revelará si un DNI existe
+RF-013                                                                            P0
+                           ante intentos no autenticados.
+
+                           Una autenticación válida mostrará solamente los
+RF-014                                                                            P0
+                           datos necesarios del propio estudiante.
+
+                           El backend verificará turno habilitado y elegibilidad
+RF-015                                                                           P0
+                           antes de emitir la cédula.
+
+                           La cédula contendrá listas vigentes, blanco y nulo
+RF-016                                                                            P0
+                           si están autorizados.
+
+                           Se exigirá elegir exactamente una opción y pasar
+RF-017                                                                            P0
+                           por pantalla de confirmación.
+
+                           Cada elección aceptará como máximo un voto por
+RF-018                                                                            P0
+                           elector, incluso ante concurrencia.
+
+                           Tras éxito, se invalidará la sesión electoral y se
+RF-019                                                                            P0
+                           mostrará constancia SIN preferencia.
+
+                           Un reintento de red distinguirá voto ya
+RF-020                     confirmado, solicitud pendiente y fallo                P0
+                           recuperable.
+
+                           El mismo estudiante podrá participar en distintas
+RF-021                                                                            P1
+                           elecciones solo si está habilitado en cada una.
+
+                           El sistema cerrará sesiones de elector por
+RF-022                                                                            P0
+                           inactividad y limpiará datos locales de sesión.
+
+
+
+
+5.3 Jornada y resultados
+ID                         Descripción comprobable                                Prioridad
+
+                           Se podrán abrir, pausar, cerrar ventanas del turno
+RF-023                                                                            P0
+                           mañana y del turno tarde.
+
+                           No se admitirán votos fuera de una ventana
+RF-024                                                                            P0
+                           abierta ni de un turno no habilitado.
+
+                           El backend actualizará conteos internamente tras
+RF-025                                                                            P0
+                           una confirmación válida.
+
+                           Los endpoints y eventos anteriores al cierre solo
+RF-026                     devolverán participación agregada, nunca conteos       P0
+                           por lista.
+
+                           Los resultados por lista se habilitarán tras cierre
+RF-027                                                                            P0
+                           global, conciliación y autorización.
+
+                           Se mostrarán votos por lista, votos blancos, nulos,
+RF-028                     válidos, emitidos, abstención y porcentaje de          P0
+                           participación.
+
+                           El escrutinio rechazará inconsistencias aritméticas
+RF-029                                                                            P0
+                           o de integridad.
+
+                           Permitirá un acta final PDF con identificador, hash,
+RF-030                                                                            P1
+                           fecha, autoridades, cifras y estado.
+
+                           Permitirá exportación de agregados, sin registros
+RF-031                                                                            P1
+                           de preferencias individualizados.
+
+                           El recuento posterior al cierre no alterará
+RF-032                                                                            P0
+                           papeletas.
+
+                           El dashboard privado se actualizará mediante SSE
+RF-033                                                                            P1
+                           con versión y reconexión.
+
+                           Los datos desglosados por turnos o grupos
+RF-034                                                                            P1
+                           pequeños respetarán umbrales de privacidad.
+
+
+
+
+                                                                                               SDD v1.0 | 05/11/2026 • Página 6
+                                                                                               SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+5.4 Administración y auditoría
+ID                                       Descripción comprobable                                Prioridad
+
+                                         El personal accederá con autenticación
+RF-035                                                                                         P0
+                                         independiente a la del elector.
+
+                                         Se validará rol, permiso, elección y etapa antes de
+RF-036                                                                                         P0
+                                         cada acción.
+
+                                         Se auditarán cambios de configuración, aperturas,
+RF-037                                                                                         P0
+                                         cierres, exportaciones y denegaciones relevantes.
+
+                                         Los logs no incluirán DNI en claro, código, cookie,
+RF-038                                                                                         P0
+                                         token ni selección de voto.
+
+                                         Se soportará cierre por doble autorización para
+RF-039                                                                                         P1
+                                         producción.
+
+                                         Una simulación podrá reiniciarse mediante
+RF-040                                   operación exclusiva y auditada; nunca una elección P1
+                                         oficial.
+
+                                         El sistema mostrará salud de BD, conectividad y
+RF-041                                                                                         P0
+                                         estado de servicios, sin exponer secretos.
+
+                                         Se generará archivo de auditoría de acciones
+RF-042                                                                                         P1
+                                         administrativas, sin vínculo identidad-voto.
+
+
+
+
+6. Requisitos no funcionales (RNF)
+ID                       Dimensión                                  Requisito                               Verificación
+
+                                                                    TLS en despliegue remoto; HTTPS
+RNF-001                  Seguridad                                                                          Escáner y revisión
+                                                                    obligatorio; cookie Secure en prod.
+
+                                                                    DNI no basta; segundo factor o mesa
+RNF-002                  Autenticación                                                                      Prueba de suplantación
+                                                                    acreditada.
+
+                                                                    Registro de voto atómico con control
+RNF-003                  Integridad                                                                         Prueba concurrente
+                                                                    único en PostgreSQL.
+
+                                                                    Sin FK persistente entre identidad y
+RNF-004                  Privacidad                                                                         Inspección de esquema
+                                                                    elección individual.
+
+                                                                    Resultados de preferencias
+RNF-005                  Confidencialidad                                                                   Pruebas de autorización
+                                                                    inaccesibles antes del cierre.
+
+                                                                    Monitoreo y backups probados; no
+RNF-006                  Disponibilidad                                                                     Ensayo de restauración
+                                                                    depender de filesystem efímero.
+
+                                                                    Objetivo p95 <3 s en envío para carga
+RNF-007                  Rendimiento                                                                      k6
+                                                                    definida.
+
+                                                                    Soportar ≥30 clientes concurrentes
+RNF-008                  Escalabilidad                              en prueba inicial, ajustar a padrón y   Carga medida
+                                                                    equipos.
+
+                                                                    Web responsive de 320 px a
+RNF-009                  Portabilidad                                                                       Playwright
+                                                                    escritorio; sin instalación.
+
+                                                                    Navegación por teclado, foco visible,
+RNF-010                  Accesibilidad                                                                      Axe/inspección
+                                                                    etiquetas y contraste adecuados.
+
+                                                                    Código TypeScript, módulos y
+RNF-011                  Mantenibilidad                                                                     CI
+                                                                    pruebas, lint sin errores.
+
+                                                                    Logs JSON estructurados con
+RNF-012                  Observabilidad                                                                     Inspección
+                                                                    correlación técnica no personal.
+
+                                                                    Totales provenientes de BD; ninguna
+RNF-013                  Consistencia                                                                       Integración
+                                                                    suma depende del cliente.
+
+                                                                    Reenvío no duplica un voto
+RNF-014                  Resiliencia                                                                        Fallo/reintento
+                                                                    confirmado.
+
+                                                                    RPO=0 para votos confirmados
+                                                                    cuando se usa replicación/backup
+RNF-015                  Recuperación                                                                       Arquitectura + simulacro
+                                                                    adecuado; NO garantizado solo con
+                                                                    backup periódico.
+
+RNF-016                  Continuidad                                Plan de papel o                         Ejercicio
+
+
+
+                                                                                                                 SDD v1.0 | 05/11/2026 • Página 7
+                                                                                               SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+ID                                Dimensión                         Requisito                               Verificación
+
+                                                                    suspensión/reanudación aprobada si
+                                                                    falla internet.
+
+                                                                    Acciones privilegiadas trazables; sin
+RNF-017                          Auditabilidad                                                              Revisión
+                                                                    filtrar preferencia.
+
+                                                                    Fixtures deterministas, pruebas
+RNF-018                          Testabilidad                                                               CI
+                                                                    desde BD aislada.
+
+                                                                    Fecha/hora del servidor en UTC,
+RNF-019                          Tiempo                                                                     Pruebas
+                                                                    visualización America/Lima.
+
+                                                                    Minimización, retención limitada y
+RNF-020                          Protección datos                                                           Revisión normativa
+                                                                    procedimiento de eliminación.
+
+                                                                    Chrome/Edge/Firefox actualizados y
+RNF-021                          Compatibilidad                                                             Matriz
+                                                                    Android Chrome.
+
+                                                                    Secretos fuera del repositorio y
+RNF-022                          Configuración                                                              Escáner secretos
+                                                                    entornos separados.
+
+                                                                    Validación Zod, limites de cuerpo y
+RNF-023                          Seguridad API                                                              Pruebas
+                                                                    tasas, consultas parametrizadas.
+
+                                                                    Estado oficial requiere autorizaciones
+RNF-024                          Gobernanza                                                                Checklist
+                                                                    verificables.
+
+                                                                    Iconos, texto y tamaños táctiles
+RNF-025                          Robustez visual                                                            Revisión UX
+                                                                    accesibles sin ambigüedad de listas.
+
+                                                                    No se publica desglose pequeño que
+RNF-026                          Privacidad por grupos                                                      Prueba acceso
+                                                                    favorezca inferencias.
+
+                                                                    Separación física o lógica fuerte
+RNF-027                          Aislamiento                                                                Revisión config
+                                                                    DEMO/PRODUCCIÓN.
+
+                                                                    Retención y borrado según política
+RNF-028                          Conservación                       institucional, no por decisión del      Acta aprobada
+                                                                    desarrollador.
+
+
+Nota sobre RPO: si la infraestructura no garantiza persistencia de commits reconocidos frente a la caída total de una zona, no debe
+prometerse RPO=0. En un MVP en una sola máquina, la recuperación sin pérdida solo cubre fallas simuladas bajo durabilidad
+efectiva de PostgreSQL; un fallo físico completo requiere restauración desde último respaldo.
+
+
+
+
+7. Arquitectura de solución
+7.1 Visión de componentes
+                                                    Diagrama 1. Arquitectura de SIVEE
+
+
+
+
+7.2 Límites de confianza
+23. Navegador no confiable. La cédula y el estado mostrados son UX; ninguna afirmación del frontend constituye permiso.
+
+
+                                                                                                                 SDD v1.0 | 05/11/2026 • Página 8
+                                                                                                   SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+24. API de aplicación. Comprueba rol, elección, turno, elegibilidad y transición de estado.
+25. PostgreSQL. Resuelve la unicidad y atomicidad de registro, con transacciones y constraints.
+26. Operador técnico. Con privilegios de sistema o BD puede observar más que el administrador lógico; el MVP NO es a prueba de
+     un servidor comprometido.
+27. Autoridad electoral. Firma y autoriza procedimientos; no puede cambiar votos individualmente.
+28. Servicios externos. Hosting, CDN y correo no deben recibir datos del voto ni acceso indiscriminado al padrón.
+
+7.3 Separación por capas
+     Presentación: rutas públicas de elector y privadas de administración.
+     Capa HTTP: controladores, validación Zod, autenticación, CSRF, autorización.
+     Aplicación: casos de uso con interfaces de repositorio; reglas de flujo.
+     Dominio: entidades, invariantes, estados, tipos de voto.
+     Infraestructura: Prisma, PostgreSQL, cifrado, importación CSV, generación de PDF.
+     Operaciones: despliegue, monitoreo y backups.
+
+7.4 Decisiones de arquitectura (ADR)
+ADR                                          Decisión                                              Alternativa descartada y motivo
+
+                                                                                                   HTML/PHP aislado dificulta modularidad y pruebas
+ADR-001                                      React + Vite + TypeScript
+                                                                                                   previstas
+
+ADR-002                                      Express en Node LTS                                   Microservicios innecesarios para la escala inicial
+
+                                                                                                   localStorage, SQLite compartido o Google Sheets
+ADR-003                                      PostgreSQL único como fuente de verdad
+                                                                                                   no cumplen concurrencia/operación prevista
+
+                                             Prisma + migraciones SQL manuales para                Aceptar solo validaciones de frontend sería
+ADR-004
+                                             CHECK/índices especiales                              inseguro
+
+                                             Actualización SSE unidireccional y consultas SQL      WebSocket bidireccional agrega complejidad para
+ADR-005
+                                             frescas                                               tablero de lectura
+
+                                                                                                   Voto con estudiante_id permite descubrir
+ADR-006                                      Identidad y voto separados en tablas
+                                                                                                   preferencia
+
+ADR-007                                      Estado y cifras autorizados calculados por servidor   Client-side contador fácilmente manipulable
+
+                                                                                                   Guardar voto y marcar participación por separado
+ADR-008                                      POST /vote transaccional + clave de idempotencia
+                                                                                                   produce corrupción
+
+ADR-009                                      Cookies HTTP-only para sesiones                       JWT en localStorage expuesto a XSS
+
+                                             Resultados por preferencia solo después de cierre     Conteos parciales pueden influir en el segundo
+ADR-010
+                                             global                                                turno
+
+                                             Deploy persistente con BD administrada o servidor Hosting gratuito efímero sin garantías no es apto
+ADR-011
+                                             local controlado                                  para elección
+
+                                                                                                   Criptografía electoral completa excede plazo del
+ADR-012                                      Prototipo con secreto práctico, no E2E verificable
+                                                                                                   MVP
+
+                                             No guardar marca de tiempo exacta por papeleta        Cronología fina permite correlación identidad-
+ADR-013
+                                             ni participación en tablas electorales                elección
+
+ADR-014                                      Autorizar sólo exportaciones agregadas                Exportar voto por fila aumenta riesgo de inferencia
+
+
+
+
+7.5 Consideraciones sobre anonimato
+La transacción de emisión necesariamente conoce en memoria la sesión del elector y su elección para imponer la regla "un elector,
+un voto". El esquema y los logs no conservarán esa asociación. Aun así, un operador malicioso con acceso al servidor, al tráfico
+descifrado, al WAL, a telemetría o a trazas podría reconstruir relaciones temporales. Por tanto, no se promete anonimato resistente
+a administrador hostil en esta primera versión. Una futura versión de alta garantía requeriría arquitectura de tokens ciegos,
+separación de autoridades, cifrado de urnas y verificabilidad criptográfica independiente; no se debe improvisar ese mecanismo
+antes del viernes.
+
+
+
+
+8. Estructura del repositorio
+ sivee/
+ ├── README.md
+ ├── docs/
+
+
+
+                                                                                                                   SDD v1.0 | 05/11/2026 • Página 9
+                                     SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+│ ├── SDD.md
+│ ├── ADR/
+│ │ ├── 001-stack.md
+│ │ ├── 002-atomic-ballot.md
+│ │ └── 003-results-embargo.md
+│ ├── API.md
+│ ├── RUNBOOK.md
+│ ├── TEST_PLAN.md
+│ ├── PRIVACY_NOTICE_TEMPLATE.md
+│ ├── INSTITUTIONAL_APPROVALS.md
+│ └── INCIDENTS.md
+├── apps/
+│ ├── web/
+│ │ ├── public/
+│ │ │ └── placeholder-logo.svg
+│ │ ├── src/
+│ │ │ ├── app/
+│ │ │ │ ├── router.tsx
+│ │ │ │ ├── providers.tsx
+│ │ │ │ └── guards.tsx
+│ │ │ ├── pages/
+│ │ │ │ ├── PublicLanding.tsx
+│ │ │ │ ├── VoterLogin.tsx
+│ │ │ │ ├── VoterIdentity.tsx
+│ │ │ │ ├── Ballot.tsx
+│ │ │ │ ├── ReviewVote.tsx
+│ │ │ │ ├── VoteReceipt.tsx
+│ │ │ │ ├── AdminLogin.tsx
+│ │ │ │ ├── AdminDashboard.tsx
+│ │ │ │ ├── AdminElection.tsx
+│ │ │ │ ├── AdminRoster.tsx
+│ │ │ │ ├── AdminLists.tsx
+│ │ │ │ ├── AdminAudit.tsx
+│ │ │ │ └── AdminReports.tsx
+│ │ │ ├── features/
+│ │ │ │ ├── election/
+│ │ │ │ ├── ballot/
+│ │ │ │ ├── voter-auth/
+│ │ │ │ ├── admin-auth/
+│ │ │ │ ├── dashboard/
+│ │ │ │ └── imports/
+│ │ │ ├── components/
+│ │ │ │ ├── ui/
+│ │ │ │ ├── charts/
+│ │ │ │ └── layout/
+│ │ │ ├── hooks/
+│ │ │ ├── lib/
+│ │ │ │ ├── api.ts
+│ │ │ │ ├── errors.ts
+│ │ │ │ └── permissions.ts
+│ │ │ ├── styles/
+│ │ │ └── main.tsx
+│ │ ├── package.json
+│ │ ├── tsconfig.json
+│ │ └── vite.config.ts
+│ └── api/
+│    ├── src/
+│    │ ├── main.ts
+│    │ ├── app.ts
+│    │ ├── config/
+│    │ ├── middlewares/
+│    │ │ ├── error-handler.ts
+│    │ │ ├── require-auth.ts
+│    │ │ ├── require-permission.ts
+│    │ │ ├── csrf.ts
+│    │ │ ├── rate-limit.ts
+│    │ │ └── request-id.ts
+│    │ ├── modules/
+│    │ │ ├── institutions/
+│    │ │ ├── elections/
+│    │ │ ├── lists/
+│    │ │ ├── voters/
+│    │ │ ├── auth/
+│    │ │ ├── ballot/
+│    │ │ ├── voting/
+│    │ │ ├── turnout/
+│    │ │ ├── results/
+
+
+                                                 SDD v1.0 | 05/11/2026 • Página 10
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+ │    │ │ ├── reports/
+ │    │ │ ├── imports/
+ │    │ │ ├── audit/
+ │    │ │ └── incidents/
+ │    │ ├── db/
+ │    │ │ ├── client.ts
+ │    │ │ ├── transactions/
+ │    │ │ └── sql/
+ │    │ ├── security/
+ │    │ │ ├── dni-lookup.ts
+ │    │ │ ├── credential-hash.ts
+ │    │ │ ├── sessions.ts
+ │    │ │ └── redaction.ts
+ │    │ ├── jobs/
+ │    │ │ ├── close-expired-windows.ts
+ │    │ │ └── cleanup-sessions.ts
+ │    │ └── shared/
+ │    ├── prisma/
+ │    │ ├── schema.prisma
+ │    │ ├── migrations/
+ │    │ └── seed-demo.ts
+ │    ├── tests/
+ │    │ ├── unit/
+ │    │ ├── integration/
+ │    │ ├── concurrency/
+ │    │ └── security/
+ │    └── package.json
+ ├── packages/
+ │ ├── types/
+ │ └── validation/
+ ├── e2e/
+ │ └── playwright/
+ ├── load/
+ │ └── k6/
+ ├── infra/
+ │ ├── compose.demo.yaml
+ │ ├── compose.production.example.yaml
+ │ ├── nginx/
+ │ ├── backups/
+ │ └── monitoring/
+ ├── .github/
+ │ └── workflows/
+ │    ├── ci.yaml
+ │    └── security.yaml
+ ├── .env.example
+ ├── .gitignore
+ ├── pnpm-workspace.yaml
+ ├── package.json
+ └── pnpm-lock.yaml
+
+
+8.1 Convenciones
+   camelCase para funciones y variables TypeScript; PascalCase para componentes React; snake_case para SQL.
+   Rutas bajo /api/v1; JSON en camelCase; estados de dominio enumerados en mayúsculas.
+   Paquetes compartidos de schemas Zod para validar exactamente lo mismo en frontend y backend.
+   Prohibido persistir contraseñas, códigos o tokens en texto claro.
+   Toda migración deberá ser reversible por despliegue sin eliminar votos; la reversión de datos productivos requiere plan
+     especial.
+   Nunca ejecutar prisma db push --force-reset, migrate reset ni seed demo sobre la BD oficial.
+   Convenciones de commits: feat(voting): ..., fix(auth): ..., test(concurrency): ..., docs(sdd): ....
+
+
+
+
+9. Dominio y modelo de datos
+9.1 Definiciones
+   Institución: entidad educativa responsable del proceso.
+   Elección: proceso de designación para un ámbito determinado; puede incluir ambas ventanas.
+   Ventana: período habilitado para votar en un turno determinado.
+   Elector: estudiante que existe en padrón y reúne requisitos.
+   Participación: registro por estudiante-elección del ejercicio del derecho al voto; NO contiene selección.
+
+
+                                                                                                      SDD v1.0 | 05/11/2026 • Página 11
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+    Voto: papeleta anónima con solo tipo y lista si es válida.
+    Lista: candidatura habilitada por el Comité.
+    Cierre global: decisión final que desactiva todas las ventanas.
+    Acta: snapshot oficial de cifras agregadas tras conciliación y aprobación.
+
+9.2 Modelo entidad–relación lógico
+                                          Diagrama 2. Modelo de datos y relaciones permitidas
+
+
+
+
+Prohibición importante: no existirá relación ESTUDIANTE → VOTO, PARTICIPACION → VOTO ni CREDENCIAL_ELECTOR → VOTO.
+
+9.3 Tablas recomendadas
+instituciones
+id UUID PK; codigo VARCHAR(30) UNIQUE; nombre; timezone DEFAULT America/Lima; created_at; updated_at.
+
+estudiantes
+id UUID PK; institucion_id FK; dni_lookup BYTEA (HMAC-SHA256 del DNI con secreto fuera de BD); dni_ciphertext BYTEA NULL (solo
+si recuperación autorizada lo requiere); apellidos_nombres (protegido mediante permisos y cifrado de disco); grado; seccion; turno
+ENUM(MANANA,TARDE); activo BOOL; created_at.
+Índice único (institucion_id, dni_lookup). Evitar crear una columna de DNI plano. Si el padrón incluye otro documento permitido,
+agregar tipo_documento y normalizador específico.
+
+elecciones
+id UUID PK; institucion_id FK; nombre; ambito; modo ENUM(DEMO,OFICIAL); estado
+ENUM(BORRADOR,PREPARADA,EN_CURSO,PAUSADA,CERRADA,CONCILIADA,PUBLICADA,ANULADA); incluye_turnos JSONB;
+config_blanco BOOLEAN; config_nulo BOOLEAN; reglamento_version; opened_at; closed_at; published_at; created_at.
+Índices (institucion_id, modo, estado).
+
+ventanas
+id UUID PK; eleccion_id FK; turno ENUM(MANANA,TARDE); estado ENUM(PROGRAMADA,ABIERTA,PAUSADA,CERRADA);
+inicio_programado; fin_programado; opened_at; closed_at.
+UNIQUE (eleccion_id, turno) si hay máximo una ventana por turno; para múltiples tramos usar secuencia y una exclusión que prohíba
+ventanas abiertas solapadas.
+
+listas_electorales
+id UUID PK; eleccion_id FK; numero SMALLINT; nombre; simbolo_url (imagen validada o ID de recurso seguro); candidatos_json
+JSONB; plan_trabajo_url NULL; estado ENUM(ACTIVA,RETIRADA); UNIQUE (eleccion_id, numero).
+
+participaciones
+id UUID PK; eleccion_id FK; estudiante_id FK; estado ENUM(PENDIENTE,VOTO_EMITIDO,ANULADA_POR_COMITE); turno; created_at.
+UNIQUE (eleccion_id, estudiante_id). No conservar vote_id, candidate_id, ballot_id ni timestamp exacto de emisión. turno responde
+al padrón al crearse y no debe ser mutable tras apertura.
+
+
+
+
+                                                                                                     SDD v1.0 | 05/11/2026 • Página 12
+                                                                                            SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+votos
+id UUID PK aleatorio; eleccion_id FK; tipo ENUM(VALIDO,BLANCO,NULO); lista_id UUID NULL FK; recuento_version SMALLINT
+DEFAULT 1 (opcional); sin estudiante_id, participacion_id, sesion_id, IP, user_agent ni emitido_at exacto.
+Constraint: (tipo='VALIDO' AND lista_id IS NOT NULL) OR (tipo IN ('BLANCO','NULO') AND lista_id IS NULL). Validar por trigger que
+lista_id pertenezca a la misma eleccion_id y esté activa. id no debe ser un consecutivo revelador.
+
+credenciales_elector
+id UUID PK; estudiante_id FK; eleccion_id FK; codigo_hash; estado ENUM(ACTIVA,REVOCADA,CADUCADA); intentos_fallidos;
+locked_until; created_at; expires_at.
+UNIQUE (eleccion_id, estudiante_id) para credencial activa mediante índice parcial, o clave única de una credencial por elector según
+política.
+
+sesiones_elector
+id UUID PK; estudiante_id FK; eleccion_id FK; session_token_hash UNIQUE; expires_at; consumed_at; revoked_at; created_at.
+Temporal: representa capacidad de votar, no la opción. Limpiar según política. No incorporar vínculos al voto.
+
+usuarios_admin
+id UUID PK; institucion_id FK; email UNIQUE; password_hash Argon2id; nombre; activo; mfa_enabled; created_at.
+
+permisos_admin
+id UUID PK; user_id FK; eleccion_id FK NULL; rol; scope; created_at; UNIQUE (user_id, eleccion_id, rol, scope) o esquema normalizado
+equivalente.
+
+sesiones_admin
+id UUID PK; user_id FK; token_hash UNIQUE; expires_at; revoked_at; created_at; last_seen_at según política. Valores de sesión nunca
+en claro en DB.
+
+auditoria_admin
+id UUID PK; eleccion_id NULL FK; admin_id FK; accion VARCHAR(80); objeto_tipo; objeto_id; cambios_redactados_json JSONB;
+resultado; created_at; request_id aleatorio.
+Nunca: registrar selección de voto, DNI en claro, claves ni tokens. Separar infraestructura de auditoría de papeletas.
+
+aprobaciones
+id UUID PK; eleccion_id FK; tipo ENUM(ABRIR,CERRAR,PUBLICAR,REINICIAR_DEMO); solicitante_admin_id FK; aprobador_admin_id FK
+NULL; estado; created_at; decided_at; motivo. En producción, aprobar requiere un usuario distinto.
+
+actas
+id UUID PK; eleccion_id FK; version INT; resumen_json JSONB; sha256 CHAR(64); estado ENUM(BORRADOR,APROBADA); created_at;
+approved_at; approved_by. No conservar copia nominativa de electores.
+
+incidentes
+id UUID PK; eleccion_id FK; turno; tipo; severidad; descripcion_sanitizada; estado; created_by; created_at; closed_at.
+
+
+9.4 Restricciones de dominio y DB
+    UNIQUE (eleccion_id, estudiante_id) en participación.
+    Restricción de forma de papeleta válido/blanco/nulo.
+    Un lista_id solo puede referir a lista activa de la propia elección.
+    Todas las elecciones no anuladas tienen entre dos y cuatro listas al pasar a PREPARADA.
+    Las filas de votos son append-only: privilegios de DB prohíben UPDATE/DELETE a usuario de aplicación; no se permite vaciado
+      en producción.
+    La cantidad de VOTO_EMITIDO coincide exactamente con COUNT(votos) por elección en los hitos de cierre/conciliación.
+    Los datos de pruebas jamás se copian al ambiente de producción.
+    El estado PUBLICADA exige CERRADA, conciliación exacta y aprobación.
+    El usuario técnico que corre la API no es superusuario de PostgreSQL.
+    Restricciones de inmutabilidad aplicadas también en backend, con privilegios SQL restringidos y triggers cuando se requiera.
+
+9.5 SQL de integridad de la papeleta (migración manual)
+ ALTER TABLE votos
+ ADD CONSTRAINT ck_tipo_lista
+ CHECK (
+   (tipo = 'VALIDO' AND lista_id IS NOT NULL)
+   OR (tipo IN ('BLANCO', 'NULO') AND lista_id IS NULL)
+ );
+
+
+
+                                                                                                        SDD v1.0 | 05/11/2026 • Página 13
+                                                                                       SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+
+ CREATE UNIQUE INDEX IF NOT EXISTS uq_participacion_eleccion_estudiante
+ ON participaciones (eleccion_id, estudiante_id);
+
+ CREATE UNIQUE INDEX IF NOT EXISTS uq_lista_numero_eleccion
+ ON listas_electorales (eleccion_id, numero);
+
+El trigger de pertenencia lista_id → eleccion_id deberá comprobar la coincidencia dentro de la misma transacción y bloquear la
+mutación de listas desde que se abre la elección. Los nombres SQL reales deben alinearse con la migración generada por Prisma.
+
+
+10. Estados electorales y reglas de negocio
+10.1 Máquina de estados de la elección
+                                                 Diagrama 3. Estados de la elección
+
+
+
+
+CERRADA, CONCILIADA y PUBLICADA son terminales respecto de la emisión de votos. La reapertura de una elección cerrada NO se
+implementa como botón común. Toda corrección debe gestionarse mediante un procedimiento electoral documentado o, si
+corresponde, nueva elección institucionalmente aprobada.
+
+10.2 Estados por ventana/turno
+   PROGRAMADA: existe cronograma, aún no se admite voto.
+   ABIERTA: el elector del turno puede emitir voto.
+   PAUSADA: se suspende ingreso de votos; no se pierde información confirmada.
+   CERRADA: no puede abrirse nuevamente en producción salvo procedimiento extraordinario separado y autorizado.
+Durante el cierre de mañana, los estudiantes de tarde NO tendrán acceso al voto. Una sola elección conjunta mantiene EN_CURSO
+durante la mañana, PAUSADA entre jornadas y EN_CURSO durante la tarde; el dashboard de preferencias continúa embargado.
+
+
+
+                                                                                                   SDD v1.0 | 05/11/2026 • Página 14
+                                                                                                  SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+10.3 Reglas de negocio — catálogo
+Regla                                                                 Definición
+
+                                                                      Una elección incluye solo listas aprobadas y activas; 2 ≤ listas ≤ 4 al
+RN-001
+                                                                      prepararla.
+
+RN-002                                                                El estudiante debe figurar como habilitado en el padrón de esa elección.
+
+RN-003                                                                El DNI es identificador de consulta; se requiere comprobación adicional.
+
+                                                                      La sesión electoral dura máximo 5 minutos de inactividad (parámetro
+RN-004
+                                                                      revisable).
+
+RN-005                                                                No se permite seleccionar varias listas simultáneamente.
+
+RN-006                                                                La elección de blanco/nulo desactiva listaId; el tipo VALIDO exige lista.
+
+RN-007                                                                Cada voto pasa por confirmación explícita y mensaje de irreversibilidad.
+
+RN-008                                                                La selección del voto no se registra en logs ni métricas por sesión.
+
+                                                                      Solo se inserta voto tras verificar ventana y participación dentro de una
+RN-009
+                                                                      transacción.
+
+                                                                      participaciones pasa de PENDIENTE a VOTO_EMITIDO solo si se
+RN-010
+                                                                      inserta exactamente una papeleta.
+
+                                                                      Un elector previamente registrado recibe respuesta de voto emitido, sin
+RN-011
+                                                                      mostrar preferencia.
+
+RN-012                                                                El total de votos coincide con el de participaciones marcadas en el cierre.
+
+RN-013                                                                Ningún usuario puede borrar un voto oficial mediante interfaz ni API.
+
+RN-014                                                                No se muestran cifras por lista antes de la autorización de publicación.
+
+                                                                      La preferencia se cuenta automáticamente en BD después de cada commit,
+RN-015
+                                                                      no en React.
+
+RN-016                                                                Cierre y publicación deben estar ligados a aprobaciones y auditados.
+
+RN-017                                                                abstenciones = habilitados - participantes; nunca valores negativos.
+
+                                                                      Los electores excluidos del padrón oficial antes de apertura no entran al
+RN-018
+                                                                      denominador.
+
+                                                                      Los cambios de horario usan zona America/Lima en interfaz y UTC
+RN-019
+                                                                      persistido.
+
+                                                                      La elección DEMO se reinicia solo en la BD DEMO, jamás mediante un
+RN-020
+                                                                      endpoint público.
+
+                                                                      En caso de empate, el software muestra «EMPATE»; el Comité resuelve
+RN-021
+                                                                      según su reglamento.
+
+                                                                      El dispositivo compartido no conserva sesión tras confirmación, vencimiento
+RN-022
+                                                                      o salida.
+
+                                                                      No se expone conteo por listas a personal de soporte técnico por su solo rol
+RN-023
+                                                                      de infraestructura.
+
+RN-024                                                                El identificador de voto jamás se entrega como recibo vinculable al elector.
+
+                                                                      Todo cambio a listas/padrón tras apertura se bloquea, no se resuelve
+RN-025
+                                                                      borrando votos.
+
+                                                                      Las interrupciones concurrentes con cierre obedecen orden de bloqueo de
+RN-026
+                                                                      filas de BD.
+
+RN-027                                                                Ninguna acta está «aprobada» sin conciliación exacta.
+
+                                                                      Para divulgar cortes por turnos o categorías pequeñas, se exige umbral de
+RN-028
+                                                                      agregación y autorización.
+
+
+
+
+10.4 Resultado electoral y definición de ganador
+Los porcentajes del gráfico deben indicar denominador en el título:
+   % de votos emitidos = votos_lista / total_emitidos × 100;
+   % de votos válidos = votos_lista / total_validos × 100;
+   % participación = emitidos / habilitados × 100.
+Evitar mezclar denominadores. El orden del dashboard puede mostrar más votos primero solo tras publicación autorizada. La
+función de «ganador» calcula el máximo de votos válidos, pero no proclama oficialmente; si hay empate, devuelve estado EMPATE
+sin desempate automático.
+
+
+                                                                                                                 SDD v1.0 | 05/11/2026 • Página 15
+                                                                                        SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+
+11. Protocolo de votación detallado
+11.1 Flujo de identificación
+29. Frontend consulta GET /api/v1/elections/active/public y obtiene exclusivamente título, horarios públicos y posibilidad de votar.
+30. El alumno escribe DNI de ocho dígitos y código de acceso individual. En otros tipos documentarios autorizados usar un formato
+     configurado.
+31. El cliente envía POST /api/v1/voter/sessions por HTTPS. No adjunta preferencias.
+32. Backend calcula HMAC_SHA256(DNI_LOOKUP_KEY, normalizedDni) y busca padrón de la elección.
+33. El backend aplica límite de solicitudes por terminal/IP y por identidad pseudonimizada, con respuestas genéricas en caso de
+     fallo.
+34. Valida hash del código con Argon2id, caducidad, bloqueo y elegibilidad, y que exista ventana abierta del turno correspondiente.
+35. Crea una sesión temporal con token aleatorio de entropía suficiente; el token se entrega en cookie Secure/HttpOnly/SameSite
+     y se almacena solo su hash en BD.
+36. El backend devuelve nombre y sección del propio elector más un electionId y vencimiento. Nunca devuelve DNI completo.
+37. Frontend pasa a confirmar identidad y pide al elector seleccionar «Soy yo».
+38. Tras inactividad o cancelación se invalida la sesión y se borra información personal del DOM/estado React.
+Amenaza mitigada: la consulta de DNI sin segundo factor no mostrará nombres, evitando exposición del padrón por enumeración.
+El acceso a nombres existe solo después de completar la validación.
+
+11.2 Flujo de emisión
+39. Frontend solicita cédula GET /api/v1/voter/ballot.
+40. Backend verifica sesión, participación pendiente y ventana abierta; devuelve listas y opciones autorizadas, sin información de
+     resultados.
+41. Alumno marca una opción y elige «Continuar».
+42. Pantalla de revisión muestra el resumen y permite «Volver» o «Confirmar voto».
+43. Frontend crea idempotencyKey (UUID aleatorio) por intento de confirmación. No se transforma en identificador de voto.
+44. Envía POST /api/v1/voter/votes con {electionId, kind, listId?} y encabezado Idempotency-Key.
+45. Backend valida el payload y dentro de transacción bloquea estado de elección/ventana de forma compatible con cierre, valida
+     elegibilidad, cambia participaciones de PENDIENTE a VOTO_EMITIDO si sigue pendiente, inserta una papeleta anónima y
+     confirma.
+46. Backend invalida capacidad de emitir otro voto en la misma sesión. Si falla la invalidación de sesión por un error posterior al
+     commit, la participación única todavía bloquea un segundo sufragio.
+47. Devuelve respuesta 201 o 200 de voto registrado con mensaje neutro; no incluye lista seleccionada, id de papeleta ni recibo
+     comprobable de preferencia.
+48. Frontend limpia estado, cierra sesión y vuelve a pantalla de inicio tras mostrar éxito. El dispositivo compartido no guarda
+     historial de votación.
+
+
+
+
+                                                                                                     SDD v1.0 | 05/11/2026 • Página 16
+                                                                                                SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+Secuencia simplificada
+                                                 Diagrama 4. Flujo de voto y registro atómico
+
+
+
+
+11.3 Pseudocódigo de transacción
+ async function castVote(
+   ctx: VoterSessionContext,
+   input: VoteInput
+ ): Promise<{ accepted: true; status: "RECORDED" | "ALREADY_RECORDED" }> {
+   validateStrictPayload(input);
+   return prisma.$transaction(async (tx) => {
+    // Orden global de locks para evitar carreras entre voto y cierre.
+    const [election] = await tx.$queryRaw<ElectionRow[]>`
+      SELECT id, estado, modo
+      FROM elecciones
+      WHERE id = ${ctx.electionId}
+      FOR SHARE
+    `;
+    const [window] = await tx.$queryRaw<WindowRow[]>`
+      SELECT id, estado, turno
+      FROM ventanas
+      WHERE eleccion_id = ${ctx.electionId}
+       AND turno = ${ctx.shift}
+      FOR SHARE
+    `;
+
+   if (!election || election.estado !== "EN_CURSO"
+      || !window || window.estado !== "ABIERTA") {
+     throw new VotingWindowClosedError();
+   }
+
+   // Comprobar en el servidor que la lista es de la misma elección.
+   await validateChoiceInsideTransaction(tx, ctx.electionId, input);
+
+   // El UPDATE impone «solo uno gana» ante dos peticiones concurrentes.
+   const rows = await tx.$queryRaw<{id: string}[]>`
+     UPDATE participaciones
+     SET estado = 'VOTO_EMITIDO'
+
+
+                                                                                                            SDD v1.0 | 05/11/2026 • Página 17
+                                                                                                 SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+        WHERE eleccion_id = ${ctx.electionId}
+         AND estudiante_id = ${ctx.studentId}
+         AND estado = 'PENDIENTE'
+        RETURNING id
+      `;
+
+      if (rows.length !== 1) {
+        // Un reintento no debe devolver el contenido previo.
+        return { accepted: true, status: "ALREADY_RECORDED" };
+      }
+
+      await tx.voto.create({
+       data: {
+         id: crypto.randomUUID(),
+         eleccionId: ctx.electionId,
+         tipo: input.kind,
+         listaId: input.kind === "VALIDO" ? input.listId : null
+       }
+      });
+
+      return { accepted: true, status: "RECORDED" };
+     }, { isolationLevel: "ReadCommitted" });
+ }
+
+Detalles imprescindibles de implementación:
+      Este ejemplo ilustra la regla de negocio, pero se deben alinear modelos/tipos Prisma reales, ejecutar pruebas de locks con
+        cierre y usar la validación de sesión/CSRF fuera de la transacción.
+      El bloqueo FOR SHARE del registro electoral/ventana debe convivir con FOR UPDATE al cerrar, y todos los cambios sensibles
+        deben tomar bloqueos en el mismo orden: elección → ventana → participación.
+      Si INSERT voto falla, todo el UPDATE participación revierte.
+      Dos llamadas concurrentes del mismo elector no insertan dos votos, aunque lleguen en paralelo.
+      No devolver el id de la papeleta ni crear tablas de mapeo con él.
+      No registrar input.kind ni input.listId en logs de solicitud.
+      Configurar statement_timeout y reintentos limitados de errores transitorios desde servidor; nunca ejecutar silenciosamente la
+        confirmación sin nueva verificación de estado.
+      Validar contexto de estudiante activo e inscripción antes de esta transacción; dentro de ella, recuperar los campos que podrían
+        cambiar si el estado administrativo todavía lo permitiera.
+      El reloj del servidor no reemplaza el estado oficial de ventana; usar ambos para validar fin programado si el Comité así lo
+        define.
+      En cierre estricto, impedir la transición del estado si hay transacciones pendientes de voto bloqueando filas.
+
+11.4 Idempotencia y fallos de red
+Escenario                                                            Tratamiento
+
+Fallo antes de iniciar transacción                                   No se guarda voto; se puede reintentar si ventana abierta
+
+Fallo después de UPDATE pero antes de INSERT                         Rollback; sin voto ni participación final
+
+Fallo después de INSERT pero antes de COMMIT                         Rollback; sin voto
+
+COMMIT realizado, respuesta perdida                                  Reintento devuelve ALREADY_RECORDED; no duplica
+
+Doble clic                                                           Botón bloqueado UX + unicidad de BD
+
+Dos navegadores de un mismo alumno                                   Solo una transacción cambia participación pendiente
+
+Cierre simultáneo                                                    Orden de bloqueos determina si voto entra antes del cierre o se rechaza
+
+Segunda solicitud con otra selección                                 Participación ya emitida impide segunda papeleta
+
+Token robado                                                         Sesión corta, cookie HttpOnly, CSRF, TLS, tasa y revocación
+
+
+La clave de idempotencia se acepta como ayuda para identificar/reconocer reintentos, pero la integridad no depende solo de ella.
+No registrar idempotency-key junto a papeleta. Un almacenamiento temporal de reintentos puede contener elector/operación,
+pero no elección seleccionada.
+
+11.5 Riesgos de privacidad de una urna electrónica básica
+No guardar un timestamp exacto en votos reduce correlación por tiempo, pero no la elimina de logs, WAL, backups, infraestructura
+ni visualización por secuencia. Deshabilitar logs HTTP de cuerpo, no correlacionar IDs de voto con sesiones, evitar exportación de
+papeletas individuales, y no dar acceso SQL directo a docentes. En la fase oficial, un experto independiente debe revisar este
+modelo de amenaza. Las afirmaciones de secreto absoluto serían incorrectas para una aplicación convencional de un solo backend.
+
+
+                                                                                                                 SDD v1.0 | 05/11/2026 • Página 18
+                                                                                          SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+
+12. API REST y contratos
+12.1 Normas generales
+     Base URL /api/v1; JSON UTF-8.
+     Se envía Content-Type: application/json excepto CSV multipart/form-data con límites de tamaño.
+     Sesiones por cookies HttpOnly, Secure (producción), SameSite=Strict cuando el flujo lo permita; token anti-CSRF adicional en
+       métodos con efectos.
+     Cada error tiene code, message, requestId. El mensaje es genérico en autenticación.
+     Prohibir cache de endpoints personales, votación y resultados privados: Cache-Control: no-store, private.
+     CORS de lista blanca de orígenes; por defecto mismo origen detrás de proxy.
+     Validación estricta con Zod; rechazar propiedades desconocidas y URLs no permitidas.
+     Las respuestas de preferencias electorales pasan obligatoriamente por guardas de publicación.
+
+12.2 Endpoints públicos y elector
+Método                             Endpoint                         Auth                             Descripción y respuesta
+
+GET                                /health/live                     No                               Proceso vivo, sin secretos
+
+                                                                                                     Preparación de BD, sin información
+GET                                /health/ready                    Interno
+                                                                                                     sensible
+
+                                                                                                     Título/estado público del proceso sin
+GET                                /elections/active/public         No
+                                                                                                     preferencias
+
+POST                               /voter/sessions                  DNI + código                     Sesión y datos mínimos de identidad
+
+                                                                                                     Nombre, grado, sección, turno, voto
+GET                                /voter/me                        Elector
+                                                                                                     ya emitido
+
+GET                                /voter/ballot                    Elector                          Listas/opciones si está habilitado
+
+POST                               /voter/votes                     Elector + CSRF                   Registra voto atómico
+
+POST                               /voter/logout                    Elector + CSRF                   Invalida sesión
+
+                                                                                                     Estado de participación propio; nunca
+GET                                /voter/status                    Elector
+                                                                                                     preferencia
+
+
+
+
+12.3 Endpoints administrativos
+Método                             Endpoint                         Permiso                          Descripción
+
+POST                               /admin/auth/login                Credenciales                     Crea sesión administrativa
+
+POST                               /admin/auth/logout               Admin                            Finaliza sesión
+
+GET                                /admin/me                        Admin                            Perfil y permisos efectivos
+
+GET                                /admin/elections                 elections:read                   Lista de elecciones de institución
+
+POST                               /admin/elections                 elections:write                  Crear en BORRADOR
+
+                                                                                                     Configuración sin preferencias
+GET                                /admin/elections/:id             elections:read
+                                                                                                     anticipadas
+
+PATCH                              /admin/elections/:id             elections:write                  Editar solo en BORRADOR
+
+POST                               /admin/elections/:id/prepare     elections:prepare                Validaciones y congelación
+
+                                   /admin/elections/:id/
+POST                                                                windows:manage                   Abrir ventana
+                                   windows/:shift/open
+
+                                   /admin/elections/:id/
+POST                                                                windows:manage                   Pausar
+                                   windows/:shift/pause
+
+                                   /admin/elections/:id/
+POST                                                                windows:manage                   Cerrar turno
+                                   windows/:shift/close
+
+                                   /admin/elections/:id/close-
+POST                                                                elections:close                  Solicitar cierre global
+                                   request
+
+POST                               /admin/elections/:id/close-      elections:approve                Aprobar cierre
+
+
+
+                                                                                                      SDD v1.0 | 05/11/2026 • Página 19
+                                                                                                 SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+ Método                               Endpoint                             Permiso                          Descripción
+
+                                      approve
+
+POST                                  /admin/elections/:id/reconcile       results:reconcile                Conteo e invariantes
+
+                                      /admin/elections/:id/publish-
+POST                                                                       results:publish                  Solicitar publicación
+                                      request
+
+                                      /admin/elections/:id/publish-
+POST                                                                       results:approve                  Aprobar publicación
+                                      approve
+
+                                      /admin/elections/:id/roster/
+POST                                                                       roster:write                     Vista previa CSV con errores
+                                      import-preview
+
+                                      /admin/elections/:id/roster/
+POST                                                                       roster:write                     Confirmar importación
+                                      import-commit
+
+                                      /admin/elections/:id/roster/                                          Totales/duplicados sin exposiciones
+GET                                                                        roster:read
+                                      summary                                                               innecesarias
+
+GET                                   /admin/elections/:id/lists           lists:read                       Listas
+
+POST                                  /admin/elections/:id/lists           lists:write                      Alta lista antes de preparar
+
+PATCH                                 /admin/elections/:id/lists/:listId   lists:write                      Edición en borrador
+
+                                                                                                            Participación agregada pre/post
+GET                                   /admin/elections/:id/turnout         turnout:read
+                                                                                                            cierre
+
+GET                                   /admin/elections/:id/results         results:read                     Conteos SOLO si PUBLICADA
+
+GET                                   /admin/elections/:id/events          turnout:read o results:read      SSE filtrado por estado y permiso
+
+                                      /admin/elections/:id/reports/
+GET                                                                        reports:read                     Acta después de publicación
+                                      final.pdf
+
+GET                                   /admin/elections/:id/audit           audit:read                       Auditoría redactada
+
+POST                                  /admin/elections/:id/incidents       incidents:write                  Reportar incidente
+
+GET                                   /admin/elections/:id/incidents       incidents:read                   Consultar incidentes
+
+                                                                                                            Solo datos ficticios, doble
+POST                                  /admin/demo/:id/reset                demo:reset
+                                                                                                            comprobación de entorno
+
+
+El nombre shift solo admite MANANA o TARDE. Las autorizaciones deben comprobar electionId específico. Restringir todos los
+endpoints a institutionId de sesión para evitar IDOR.
+
+12.4 Ejemplo de autenticación de elector
+Solicitud (POST /api/v1/voter/sessions):
+ {
+     "electionId": "e5b814dd-7f38-46d8-bcdb-a8db795fe8c9",
+     "dni": "00000001",
+     "accessCode": "DEMOCODE-001"
+ }
+
+Respuesta de demostración (200; cookie segura por encabezado):
+ {
+     "data": {
+       "student": {
+        "displayName": "María Ejemplo",
+        "grade": "3°",
+        "section": "A",
+        "shift": "MANANA"
+       },
+       "electionId": "e5b814dd-7f38-46d8-bcdb-a8db795fe8c9",
+       "expiresInSeconds": 300
+     }
+ }
+
+00000001 y DEMOCODE-001 son credenciales ficticias usadas solo en fixtures de ensayo. Los códigos oficiales se generan
+aleatoriamente y no siguen una secuencia predecible.
+
+12.5 Ejemplo de cédula
+ {
+     "data": {
+
+
+                                                                                                             SDD v1.0 | 05/11/2026 • Página 20
+                                                                                                       SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+         "electionId": "e5b814dd-7f38-46d8-bcdb-a8db795fe8c9",
+         "ballotVersion": 1,
+         "lists": [
+           {"id":"35b9e886-20f0-4f7e-963c-46bc36e3f0c8","number":1,"name":"Lista 1 - Ejemplo","symbolUrl":"/assets/lists/1.png"},
+           {"id":"aaf3e18a-f9bd-437e-8f44-b6768de897d4","number":2,"name":"Lista 2 - Ejemplo","symbolUrl":"/assets/lists/2.png"}
+         ],
+         "blankAllowed": true,
+         "nullAllowed": true
+     }
+ }
+
+Ejemplo de envío de voto válido
+ POST /api/v1/voter/votes
+ Content-Type: application/json
+ X-CSRF-Token: <token-de-sesion>
+ Idempotency-Key: 9381ef19-ce26-4c42-9fdb-702646098e8e
+ Cookie: sivee_voter=<cookie-http-only>
+
+ {
+     "electionId": "e5b814dd-7f38-46d8-bcdb-a8db795fe8c9",
+     "kind": "VALIDO",
+     "listId": "35b9e886-20f0-4f7e-963c-46bc36e3f0c8"
+ }
+
+Respuesta:
+ {
+     "data": {
+       "status": "RECORDED",
+       "message": "Tu participación fue registrada correctamente."
+     }
+ }
+
+Para blanco/nulo, kind será BLANCO o NULO y listId debe omitirse o ser null. No se incluyen resultados ni datos de papeleta en la
+respuesta.
+
+12.6 Ejemplo de error estandarizado
+ {
+     "error": {
+       "code": "VOTING_WINDOW_CLOSED",
+       "message": "La votación no está habilitada en este momento.",
+       "requestId": "f4abe94a-9c59-4ba3-8fba-8478f031ecb0"
+     }
+ }
+
+Código HTTP                                           Código funcional                                 Significado
+
+400                                                   INVALID_PAYLOAD                                  Campos/formato erróneos
+
+401                                                   UNAUTHENTICATED                                  Sin sesión o sesión caducada
+
+403                                                   FORBIDDEN                                        Permiso no concedido
+
+404                                                   NOT_FOUND                                        Recurso inexistente/no visible
+
+409                                                   ALREADY_RECORDED                                 Ya participó; nunca detallar elección
+
+409                                                   INVALID_ELECTION_STATE                           Transición no válida
+
+409                                                   RECONCILIATION_FAILED                            Totales inconsistentes
+
+423                                                   AUTH_TEMPORARILY_LOCKED                          Intentos limitados
+
+429                                                   RATE_LIMITED                                     Exceso de solicitudes
+
+503                                                   DEPENDENCY_UNAVAILABLE                           BD o servicio no disponible
+
+
+En la emisión final el servicio puede devolver 200 neutro al elector ya registrado, sin tratarlo como error grave. Esto se debe fijar en
+un contrato único y probarse end-to-end; nunca dejar respuestas contradictorias de backend y UI.
+
+12.7 SSE y políticas de filtrado
+Canal: GET /api/v1/admin/elections/:id/events. Conexión autenticada con sesión administrativa, no pública. Reconexión automática
+con Last-Event-ID por versión monotónica de estado, no por ID de papeleta.
+Antes de publicar:
+
+
+
+                                                                                                                     SDD v1.0 | 05/11/2026 • Página 21
+                                                                                                             SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+ event: turnout.updated
+ data: {"v":57,"eligible":600,"voted":310,"participationPct":51.67}
+
+Después de publicar:
+ event: results.published
+ data: {"v":79,"eligible":600,"voted":480,"valid":440,"blank":25,"null":15}
+
+Los datos por lista se obtienen con GET /admin/elections/:id/results luego de validar el estado PUBLICADA, o se incluyen en un evento
+posterior únicamente bajo la misma guarda. No enviar payload de resultados al navegador «oculto con CSS». Un observador sin
+results:read solo recibe participación. Los eventos de turno no exponen grupos pequeños.
+
+Implementación MVP alternativa: polling de participación cada 5–10 segundos con Cache-Control: no-store. Para el viernes, polling
+confiable es preferible a SSE incompleto; la BD continúa el conteo en tiempo real. SSE se agrega como mejora si su seguridad y
+reconexión están probadas.
+
+
+
+
+13. Controles de seguridad y privacidad
+13.1 Identidad y credenciales
+    DNI de ocho dígitos: solo identificador del padrón, nunca contraseña.
+    dni_lookup = HMAC-SHA256(PEPPER_SECRETO, dni_normalizado); clave en variable secreta y fuera de respaldos de BD. El
+      pepper debe permitir migración/rotación controlada, pues cambiarlo sin remapear el padrón rompe las búsquedas.
+    PIN o código de un solo uso suficientemente aleatorio, almacenado con Argon2id, duración acotada; no derivarlo del DNI, fecha
+      de nacimiento ni matrícula.
+    Límite de intentos por credencial y origen; estrategia anti-enumeración (mismo mensaje para DNI inexistente/código erróneo).
+    Códigos imprimibles o entregados por un canal institucional autorizado; su distribución es parte del procedimiento y requiere
+      responsables.
+    Para mesa presencial supervisada, autorización temporal emitida por un docente acreditado solo después de verificar
+      identidad; la mesa nunca elige la opción.
+    Credenciales de docentes con MFA TOTP o método fuerte para producción; contraseñas Argon2id.
+    Dos sesiones de clase diferente: sivee_voter y sivee_admin, con rutas, scopes y expiraciones separados.
+
+13.2 Cookies, sesiones y CSRF
+    Cookies HttpOnly, Secure, SameSite=Strict por defecto y Path acotado cuando aplique; jamás localStorage para tokens.
+    Backend guarda hash de token, revocación y expiración.
+    session.regenerate o nueva sesión después de login, para evitar fijación.
+    Session timeout por inactividad de 5 minutos para elector y 15–30 min para operador (a definir).
+    En logout/éxito: Clear-Site-Data donde sea apropiado, borrado del estado React y revocación en servidor; limpiar autocomplete
+      y evitar caché.
+    CSRF double-submit firmado o token ligado a sesión; verificar Origin/Referer como capa adicional. SameSite no sustituye por
+      completo CSRF.
+    Content Security Policy restrictiva; evitar unsafe-inline salvo excepción justificada y auditada.
+
+13.3 Autorización
+La estrategia deny by default comprobará {user, role, permission, institutionId, electionId, state} en middleware y casos de uso. No
+basta con ocultar botones. Los datos devueltos por cada ruta deben reducirse al mínimo. Probar control de acceso horizontal
+(cambiar electionId) y vertical (cambiar rol/endpoint).
+
+13.4 Protección frente a amenazas
+Amenaza                               Severidad                               Mitigación                                Prueba
+
+Suplantación por DNI conocido         Crítica                                 Código de acceso o mesa acreditada        Intento solo con DNI
+
+                                                                              UPDATE condicional + transacción
+Voto duplicado por doble clic         Crítica                                                                           100 solicitudes concurrentes
+                                                                              DB
+
+Manipulación de payload/lista         Alta                                    Zod + validar lista/elección en DB        Lista externa o nula
+
+Resultado filtrado antes de cierre    Crítica                                 Guarda server-side + SSE filtrado         GET directo con todos los roles
+
+Ataque de fuerza bruta                Alta                                    Rate limit, lockout, alertas              Barrido de credenciales
+
+Inyección SQL                         Crítica                                 Prisma / SQL parametrizado                Payloads maliciosos
+
+XSS en nombre de lista                Alta                                    Escape React, sanitización, CSP           Cadena <script>
+
+
+                                                                                                                         SDD v1.0 | 05/11/2026 • Página 22
+                                                                                                             SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+Amenaza                                  Severidad                               Mitigación                                  Prueba
+
+CSRF                                    Alta                                    Token + origin + cookies                     POST cross-site
+
+IDOR                                    Alta                                    Scoping por institución y elección           Cambiar UUID
+
+Sesiones persistentes en PC
+                                        Alta                                    TTL corto, cierre forzado, no-cache          Navegación atrás/refresh
+compartida
+
+Filtración de padrón por API            Alta                                    Respuesta genérica, segundo factor           Enumeración
+
+                                                                                Umbral y no publicar resultados por
+Inferencia por turno/grupo pequeño      Media/Alta                                                                           Grupo < umbral
+                                                                                turno
+
+                                                                                Cifrado en reposo, mínimo privilegio,
+Compromiso de base de datos             Crítica                                                                              Revisión de permisos
+                                                                                backups
+
+                                                                                No timestamps de papeletas, no
+Correlación temporal de votos           Alta                                                                                 Revisión trazas
+                                                                                request bodies
+
+                                                                                RBAC, doble aprobación, logs
+Mal uso por administrador               Crítica                                                                              Prueba de acciones restringidas
+                                                                                inmutables
+
+                                                                                Contingencia offline institucional, no
+Caída de internet                       Alta                                                                                 Simulación de desconexión
+                                                                                buffer local no verificado
+
+                                                                                pg_dump consistente/PITR según
+Backup incoherente                      Alta                                                                                 Restaurar y conciliar
+                                                                                modalidad
+
+Despliegue de demo en prod              Crítica                                 Variables, claves y DB diferentes            Test de bloqueo
+
+                                                                                HTTPS/HSTS y verificación desde
+Mala configuración DNS/TLS              Alta                                                                                 Chequeo de TLS
+                                                                                equipos
+
+                                                                                Evitar SVG arbitrario; convertir a
+Manipulación de símbolo SVG             Alta                                                                                 Subida maliciosa
+                                                                                PNG/JPEG seguros
+
+
+
+
+13.5 Logging y minimización
+Se permite: requestId, método, ruta parametrizada (sin query sensible), status, duración, evento administrativo categórico, estado
+de servicio.
+Se prohíbe: body de /voter/votes, DNI, nombre de alumno, código, cookie, token, listId ligado al requestId del elector, hora exacta
+por papeleta y direcciones IP completas si no son necesarias y autorizadas.
+Un registro «alumno X votó lista Y» nunca se debe generar, ni siquiera a título de depuración.
+Evitar instrumentación de analítica, heatmaps, grabación de sesión, software de monitoreo que capture pantalla o trazas HTTP
+completas en pantallas de sufragio.
+
+13.6 Política de privacidad y retención
+La institución, asesorada por su responsable competente, aprobará: finalidad y base legal del tratamiento, información a titulares,
+acceso por rol, encargados de tratamiento, dónde se aloja la información, medidas de seguridad, plazos de retención de
+padrón/actas/auditorías, procedimiento de ejercicio de derechos y borrado seguro. No fijar plazos arbitrarios en el código ni
+exportar el padrón a terceros para pruebas.
+
+13.7 Análisis STRIDE simplificado
+Componente            S                        T                     R                        I                      D                          E
+
+Login elector         Suplantación             Códigos               Intentos                 Enumeración            Brute force                Sesión indebida
+
+API de votos          Token robado             Alterar tipo          Negación sin acta        Preferencia en logs    Spam                       Forzar segundo voto
+
+                                                                                                                                                Escalada de
+Admin                 Credencial robada        Abrir/cerrar          Cambio no auditado       Filtrar resultados     Bloqueo voluntario
+                                                                                                                                                permisos
+
+                                                                                                                                                Superusuario
+PostgreSQL            Robo de secretos         Modificar votos       Falta de trazas          Padrón expuesto        Caída
+                                                                                                                                                abusivo
+
+                                                                                              Resultados
+SSE                   Cookies robadas          Inyección de evento   Falta versión                                   Conexiones masivas         Acceso sin permiso
+                                                                                              anticipados
+
+
+S=Spoofing, T=Tampering, R=Repudiation, I=Information disclosure, D=Denial of service, E=Elevation of privilege.
+
+
+
+
+                                                                                                                              SDD v1.0 | 05/11/2026 • Página 23
+                                                                                           SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+14. Diseño de interfaces y experiencia de usuario
+14.1 Sistema visual
+   Idioma principal: español peruano; mensajes breves, sin tecnicismos.
+   Tipografía: Inter o fuente de sistema; contraste AA y tamaños legibles.
+   Paleta institucional configurable sin color político dominante en la página electoral.
+   Listas con igualdad visual: misma altura, logo de tamaño equivalente, número y nombre; no favorecer a una.
+   Objetivos táctiles de 44×44 px como referencia para controles relevantes.
+   Progreso guiado: Identificación → Verificación → Voto → Confirmación → Finalizado.
+   Cero publicidad y cero capturas de sesión.
+   prefers-reduced-motion, foco visible, lectores de pantalla, uso sin ratón y alternativa asistida.
+
+
+14.2 Mapa de navegación
+                                               Diagrama 5. Navegación de la aplicación
+
+
+
+
+14.3 Especificación por pantalla
+UX-01: Portada pública
+   Encabezado: logotipo institucional, Elecciones del Municipio Escolar 2026.
+   Estado: Próximamente, Votación abierta, Pausada, Finalizada; no mostrar preferencias.
+   CTA principal: Iniciar votación.
+   Texto de ayuda: “Ten a mano tu documento y código de acceso.”
+   Pie de página con contacto de mesa, política breve de datos y enlace de accesibilidad.
+   No mostrar padrón ni listas antes del momento aprobado, si la institución lo restringe.
+
+UX-02: Identificación
+   Campo DNI de 8 dígitos, teclado numérico móvil y input autocomplete=off.
+   Campo código individual (enmascarado, botón mostrar controlado).
+   CTA Verificar identidad.
+   Errores neutrales: “No pudimos verificar tus datos. Solicita ayuda a la mesa.”
+   Nunca: “Ese DNI pertenece a Juan Pérez” antes de autenticar.
+   Rate limit visual con reintento después de espera sin revelar existencia del alumno.
+
+UX-03: Confirmación de identidad
+   Solo después de doble autenticación: nombre, grado, sección, turno.
+   Botones Sí, soy yo y Necesito ayuda.
+   Cierre automático de pantalla tras inactividad.
+
+
+                                                                                                       SDD v1.0 | 05/11/2026 • Página 24
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+   Si ya votó: “Tu participación ya está registrada”; no mostrar opción seleccionada.
+
+UX-04: Cédula
+   Título, identificación de elección (no del estudiante si no es necesario) y fecha.
+   Tarjetas idénticas por lista, radio button con etiqueta completa; símbolo alternativo textual.
+   Sección separada y neutral para Voto en blanco / Voto nulo, autorizadas por reglamento.
+   Ninguna opción preseleccionada.
+   CTA deshabilitado hasta elegir; textos claros de diferencia entre blanco y nulo acordados por Comité.
+   Vistas para 2, 3 y 4 listas; sin scroll horizontal en móvil.
+   Confirmar que acceso a imagen no implique cargar recursos remotos rastreables.
+
+UX-05: Confirmación
+   Título “Revisa tu elección”.
+   Resumen de la selección; CTA secundario Modificar.
+   CTA principal Confirmar voto; advertencia “Después de confirmar, no podrás cambiarlo”.
+   Durante envío: bloquear botón, mostrar indicador y no permitir navegación con doble post.
+   Ante red inestable: “Comprobando el estado de tu participación…” y realizar consulta de estado; no pedir al alumno que vuelva
+     a votar inmediatamente.
+
+UX-06: Constancia
+   Ícono de registro completo, mensaje sin datos de preferencia.
+   Texto: “Tu participación fue registrada correctamente.”
+   Botón “Finalizar”; sesión invalidada.
+   Cuenta regresiva o redirección a pantalla inicial de mesa para evitar que el siguiente estudiante vea información.
+   No emitir un recibo imprimible de preferencia ni QR vinculable a papeleta.
+
+UX-07: Admin login
+   Campos email y contraseña; MFA en modo oficial.
+   Sin enlace a la votación personal del alumno desde panel de administración.
+   Auditoría de accesos y errores genéricos.
+
+UX-08: Dashboard de jornada
+   KPIs: padrón total, votaron, faltan, porcentaje; por turno SOLO cuando no produce inferencia de preferencias.
+   Banner grande Resultados electorales ocultos hasta publicación.
+   Estado por ventana, conexión SSE/polling y última sincronización.
+   Gráficas de progreso de participación, no de listas, durante la votación.
+   Indicadores de integridad de servicio y fallos; no mostrar datos individuales.
+
+UX-09: Configuración
+   Formulario de elección; modo DEMO claramente destacado.
+   Validaciones antes de PREPARADA: padrón no vacío, listas aprobadas, turnos, credenciales, autorizaciones, horarios, backup,
+     contacto.
+   Confirmación doble de cambios sensibles.
+
+UX-10: Padrón
+   Importación CSV, vista previa, filas válidas y rechazadas, duplicados, resumen por grado/sección/turno.
+   Buscar estudiante solo para personal autorizado; respuesta limitada.
+   Descarga de errores con identificadores minimizados (por ejemplo fila del CSV, no archivo original difundido).
+
+UX-11: Gestión de listas
+   Número, nombre, símbolo, candidatos, plan de trabajo; igualdad de espacio.
+   Vista previa pública; restricción de 2–4 listas al preparar.
+   Validación de activos digitales de imagen; preferir PNG/JPEG.
+
+UX-12: Gestión de jornada
+   Estado de cada turno, acción Abrir, Pausar, Cerrar.
+   Confirmar motivos, aprobación, fecha/hora servidor.
+   No ofrecer “Borrar votos”, “Editar voto” ni “Reabrir cerrada” en producción.
+
+UX-13: Resultados finales
+   Disponible solo con PUBLICADA y permiso autorizado.
+
+
+                                                                                                     SDD v1.0 | 05/11/2026 • Página 25
+                                                                                      SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+   Indicadores: votos válidos, blancos, nulos, emitidos, habilitados, abstenciones.
+   Gráfico horizontal por lista, distribución blanco/nulo, verificador de sumas.
+   Estado de conciliación y versión del acta.
+   Etiqueta Resultado preliminar interno hasta que Comité Electoral apruebe su acta; no confundir cálculo automático con
+     proclamación.
+
+UX-14: Actas y auditoría
+   PDF descargable del resumen electoral con hash, elecciones, número de versión y espacio para firmas del Comité.
+   Historial de transiciones y aprobaciones, nunca registros que vinculen elector y papeleta.
+   Riesgos y fallos visibles a responsables, sin revelar datos sensibles.
+
+14.4 Wireframes textuales
+Pantalla de sufragio (desktop)
+ ┌──────────────────────────────────────────────────────────┐
+ │ LOGO I.E. ELECCIONES MUNICIPIO ESCOLAR 2026       │
+ │          Selecciona UNA opción            │
+ │ ┌──────────────────────────────────────────────────────┐ │
+ │ │ ( ) [SIMBOLO] LISTA N.° 1 · NOMBRE DE LA LISTA ││
+ │ └──────────────────────────────────────────────────────┘ │
+ │ ┌──────────────────────────────────────────────────────┐ │
+ │ │ ( ) [SIMBOLO] LISTA N.° 2 · NOMBRE DE LA LISTA ││
+ │ └──────────────────────────────────────────────────────┘ │
+ │ ┌──────────────────────────────────────────────────────┐ │
+ │ │ ( ) Voto en blanco                  ││
+ │ └──────────────────────────────────────────────────────┘ │
+ │ ┌──────────────────────────────────────────────────────┐ │
+ │ │ ( ) Voto nulo/viciado                ││
+ │ └──────────────────────────────────────────────────────┘ │
+ │ [Cancelar y salir]        [Continuar >]     │
+ └──────────────────────────────────────────────────────────┘
+
+Dashboard durante votación — SIN resultados de listas
+ ┌─────────────────────────────────────────────────────────────┐
+ │ SIVEE · ELECCION 2026 [Jornada en curso] [Salir] │
+ ├─────────────────────────────────────────────────────────────┤
+ │ Padrón: 600 Emitidos: 310 Faltan: 290 Avance: 51,7% │
+ │ [Barra de participación]                    │
+ │ Turno mañana: cerrado | Turno tarde: abierto          │
+ │                                  │
+ │ Resultados por lista: OCULTOS HASTA CIERRE AUTORIZADO    │
+ │ [Estado servidor] [Última actualización] [Incidentes]  │
+ └─────────────────────────────────────────────────────────────┘
+
+Dashboard después de publicación
+ ┌─────────────────────────────────────────────────────────────┐
+ │ SIVEE · RESULTADOS AUTORIZADOS Acta: 001 · Hash: ... │
+ ├─────────────────────────────────────────────────────────────┤
+ │ Emitidos: 480 Válidos: 440 Blancos: 25 Nulos: 15      │
+ │ Lista N.° 1 █████████████████████                   185   │
+ │ Lista N.° 2 █████████████████                  155      │
+ │ Lista N.° 3 ███████████                 100      │
+ │ Total verificado: 480 = 440 + 25 + 15          │
+ │ Abstenciones: 120 | Participación: 80%            │
+ │ [Exportar acta PDF] [Ver auditoría]             │
+ └─────────────────────────────────────────────────────────────┘
+
+
+
+
+15. Escrutinio, reconciliación y publicación
+15.1 Algoritmo SQL del recuento
+ SELECT
+  v.eleccion_id,
+  COUNT(*)::integer AS emitidos,
+  COUNT(*) FILTER (WHERE v.tipo = 'VALIDO')::integer AS validos,
+  COUNT(*) FILTER (WHERE v.tipo = 'BLANCO')::integer AS blancos,
+  COUNT(*) FILTER (WHERE v.tipo = 'NULO')::integer AS nulos
+ FROM votos v
+
+
+
+                                                                                                  SDD v1.0 | 05/11/2026 • Página 26
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+ WHERE v.eleccion_id = $1
+ GROUP BY v.eleccion_id;
+
+ SELECT
+  l.id AS lista_id,
+  l.numero,
+  l.nombre,
+  COUNT(v.id)::integer AS total
+ FROM listas_electorales l
+ LEFT JOIN votos v
+ ON v.lista_id = l.id
+ AND v.eleccion_id = l.eleccion_id
+ AND v.tipo = 'VALIDO'
+ WHERE l.eleccion_id = $1
+ GROUP BY l.id, l.numero, l.nombre
+ ORDER BY l.numero;
+
+Importante: ejecutar estas consultas solo desde servicio de escrutinio con guardas de estado y permisos, y no publicar el resultado
+hasta tener autorización.
+
+15.2 Fórmulas verificables
+Definiciones: H = habilitados; P = participaciones con VOTO_EMITIDO; V = papeletas; VV = válidos; B = blancos; N = nulos; Li = votos
+por lista i; A = abstenciones.
+ P=V
+ V = VV + B + N
+ VV = Σ Li
+ A=H-P
+ 0≤P≤H
+ porcentaje_participacion = redondeo(100 × P / H, 2)
+
+Si H=0, no publicar porcentaje con división por cero; la elección no debe alcanzar PREPARADA. Empate cuando varias listas
+comparten el mayor total válido.
+
+15.3 Proceso formal de cierre
+49. Responsable cierra la última ventana. Las transacciones de emisión ya iniciadas se resuelven antes de confirmar cierre según
+     bloqueo en BD.
+50. Solicitud de cierre global registra el motivo, elección y estado esperado.
+51. Segunda autoridad aprueba en ambiente oficial; se transiciona EN_CURSO/PAUSADA → CERRADA.
+52. Motor de reconciliación ejecuta consultas sobre una instantánea consistente; verifica que no haya otras ventanas abiertas y
+     que los invariantes sean exactos.
+53. Si hay diferencia, estado queda CERRADA; no publicar. Registrar incidente y realizar diagnóstico sin borrar ni modificar votos.
+54. Si coincide, estado CONCILIADA; se crea un snapshot del acta con totales y versión, con hash SHA-256 del JSON canónico de
+     resultados/metadatos.
+55. Comité revisa el acta; autorización de publicación de persona distinta.
+56. Elección pasa a PUBLICADA; desde ese momento API expone resultados a los perfiles designados.
+57. El Comité firma/proclama mediante procedimiento institucional.
+
+15.4 Integridad del acta
+El hash detecta modificación posterior si existe copia del hash original fuera del mismo sistema y con custodia independiente; por
+sí solo no demuestra que todos los votos originales sean auténticos. Debe acompañarse de controles organizativos, backup,
+conciliación y evidencia de pruebas. Conservar versión, fecha, total, listas, suma y constancia de aprobaciones.
+
+15.5 Recuento con acta previa
+Si se recalcula después de publicación: generar nueva versión y registrar diferencias, motivos y autorizaciones, manteniendo acta
+anterior. No sobrescribir ni borrar el historial. El usuario verá la versión vigente y el estado de controversia si aplica.
+
+
+
+
+16. Estrategia de pruebas y calidad
+16.1 Pirámide de pruebas
+58. Unitarias (Vitest/Jest): esquemas Zod, permisos, FSM, cálculos y errores.
+
+
+
+
+                                                                                                      SDD v1.0 | 05/11/2026 • Página 27
+                                                                                              SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+59. Integración (PostgreSQL desechable): transacciones, índices, estados, control de acceso; nunca usar mocks para probar
+     unicidad.
+60. E2E (Playwright): estudiante en móvil/desktop, admin, reconexión y cierre.
+61. Concurrencia (Node workers/k6): 2–100 requests en paralelo con misma identidad y varias identidades.
+62. Seguridad (OWASP ZAP modo pasivo/manual): acceso indebido, CSRF, XSS, IDOR, autenticación, filtrado de datos.
+63. Operacionales: backup, restore, caída de API, caída de DB, cambio de turno y dispositivos compartidos.
+
+16.2 Casos unitarios esenciales
+Caso                            Precondición                             Acción                            Oráculo
+
+UT-01                           DNI vacío                                Validar                           Rechazado
+
+UT-02                           DNI 7/9 dígitos                          Validar                           Rechazado
+
+UT-03                           Tipo válido sin lista                    Validar                           Rechazado
+
+UT-04                           Blanco con listId                        Validar                           Rechazado
+
+UT-05                           Nulo con listId                          Validar                           Rechazado
+
+UT-06                           Lista de otra elección                   Validar                           Rechazado
+
+UT-07                           Elección con una lista                   Preparar                          Rechazado
+
+UT-08                           Elección con cinco listas                Preparar                          Rechazado
+
+UT-09                           Turno tarde cerrado                      Obtener cédula                    Rechazado
+
+UT-10                           Estado cerrado                           Votar                             Rechazado
+
+UT-11                           Empate                                   Calcular resultado                Estado EMPATE
+
+UT-12                           Cero habilitados                         Preparar                          Rechazado
+
+UT-13                           Dos votos + blanco                       Recontar                          Fórmulas correctas
+
+UT-14                           Cambio de estado ilegal                  Transicionar                      409
+
+UT-15                           Privilegio faltante                      Ejecutar acción                   403
+
+
+
+
+16.3 Casos de integración críticos
+ID                                            Prueba                                          Resultado exigido
+
+IT-01                                         Registrar voto válido                           1 participación y 1 papeleta
+
+IT-02                                         Fallo forzado en INSERT después de UPDATE       0 papeletas nuevas, participación sigue PENDIENTE
+
+IT-03                                         Doble voto secuencial                           Total sigue siendo 1
+
+IT-04                                         100 POST concurrentes del mismo alumno          Exactamente 1 nuevo voto
+
+IT-05                                         50 alumnos diferentes concurrentes              Exactamente 50 nuevos votos
+
+                                                                                              O 1 voto completo antes de cierre, o 0; jamás
+IT-06                                         Votar y cerrar turno a la vez
+                                                                                              parcialmente
+
+IT-07                                         Acta si P≠V                                     Bloquea publicación
+
+IT-08                                         Elección publicada                              Rechaza todo POST de voto
+
+IT-09                                         Exportación por observador sin permiso          403
+
+                                              Intento de UPDATE/DELETE de papeleta con rol
+IT-10                                                                                         Denegado
+                                              API
+
+IT-11                                         Caída de API tras commit                        Reintento neutro, sin nuevo voto
+
+IT-12                                         Nombre de lista con HTML malicioso              Texto escapado, sin ejecución
+
+IT-13                                         Consulta admin de otra elección                 403/404 sin datos
+
+IT-14                                         SSE pre-cierre                                  No contiene listas ni porcentajes
+
+IT-15                                         Reinicio API/BD y reconexión                    Persistencia y conciliación conservadas
+
+IT-16                                         Cambio de horario a UTC                         Turno equivale al horario local previsto
+
+IT-17                                         Back del navegador tras emisión                 Sin identidad/opción en caché
+
+IT-18                                         Rate limit en códigos incorrectos               Bloqueo controlado sin enumeración
+
+IT-19                                         Importación CSV con DNI duplicados              Preview falla; no importación parcial
+
+IT-20                                         Demo intenta conectar DB prod                   Inicio bloqueado por guardarraíl de entorno
+
+
+
+                                                                                                            SDD v1.0 | 05/11/2026 • Página 28
+                                                                                                SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+
+16.4 Carga y concurrencia
+Objetivo inicial de ensayo: 30 clientes concurrentes durante 5 minutos; escenario de ráfaga 100 intentos de emisión sobre varias
+identidades ficticias. Medir error rate, p50/p95/p99, CPU, conexiones DB, bloqueos, votos confirmados y reconciliación.
+No simular 100 intentos concurrentes con el mismo alumno para estimar throughput general; es una prueba distinta de
+idempotencia/unicidad.
+Progresión:
+   Escenario A: 10 usuarios, funcional.
+   Escenario B: 30 usuarios, operación nominal propuesta.
+   Escenario C: 50–100 usuarios, ráfaga.
+   Escenario D: 100 intentos sobre misma identidad; se acepta exactamente uno.
+   Escenario E: cierre simultáneo con votos; cero estado corrupto.
+El límite real será calculado con padrón, cantidad de equipos y red disponible. Para una escuela de 600 estudiantes, el volumen total
+de votos es pequeño, pero las ráfagas en un laboratorio pueden ser mayores.
+
+16.5 Matriz de trazabilidad simplificada
+Requisito                                       Componente                                      Prueba
+
+RF-003/004                                     imports, students                                IT-19
+
+RF-011/012/013                                 voter-auth                                       UT-01/02, IT-18
+
+RF-015/024                                     elections, windows                               UT-09/10, IT-06
+
+RF-016/017                                     ballot, vote                                     UT-03/04/05/06
+
+RF-018/019/020                                 vote, participation                              IT-01/02/03/04/11
+
+RF-025/026                                     turnout, results, events                         IT-14
+
+RF-027/029                                     closing, reconciliation                          IT-07/08
+
+RF-035/036                                     auth-admin, permissions                          IT-09/13
+
+RF-037/038                                     audit, redaction                                 Revisión de logs
+
+RNF-003/004/013                                PostgreSQL + servicio voto                       IT-01–05
+
+RNF-017/020/026                                Privacidad y políticas                           Checklist de seguridad
+
+
+
+
+16.6 Criterios de bloqueo de lanzamiento
+GO/NO-GO:
+   NO-GO si existe un solo caso de doble voto aceptado.
+   NO-GO si tras commit aparece una diferencia P vs V.
+   NO-GO si puede votarse con DNI solo en modo oficial.
+   NO-GO si antes de publicación existe algún endpoint, log o evento que filtre preferencias.
+   NO-GO si puede un usuario no autorizado abrir, cerrar, publicar o exportar.
+   NO-GO si no existe aprobación institucional del procedimiento.
+   NO-GO si el respaldo/restauración no se verificó en la infraestructura final.
+   NO-GO si no hay plan ante caída de red o electricidad.
+   NO-GO si hay datos reales en la simulación o ambos ambientes comparten secretos.
+   NO-GO si el Comité no aprobó representación de blanco/nulo y ámbitos por turno.
+
+
+
+
+17. Diseño de despliegue
+17.1 Entornos
+Entorno                    Finalidad                      Datos                       Acceso                           Persistencia
+
+Local dev                  Desarrollo                     Fixtures ficticios          Equipo del desarrollador         Docker Postgres
+
+DEMO                       Simulación del viernes         Padrón y listas ficticios   Docentes designados              PostgreSQL separado
+
+
+
+                                                                                                                 SDD v1.0 | 05/11/2026 • Página 29
+                                                                                            SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+Entorno                      Finalidad                 Datos                      Acceso                        Persistencia
+
+                                                       Datos sintéticos
+STAGING                      Ensayo de producción                                 Equipo QA                     Igual a producción
+                                                       representativos
+
+PRODUCCIÓN                   Elección aprobada         Padrón autorizado          Solo operación y electores    BD persistente con respaldo
+
+
+Invariante: los secretos y DATABASE_URL de cada ambiente deben ser distintos. En modo DEMO, el arranque verificará que
+DATABASE_URL no apunte al identificador de base sivee_prod y que SIVEE_ENV=demo.
+
+
+17.2 Opción A — servidor escolar / laboratorio controlado
+Arquitectura: PC o servidor institucional con Linux o Windows/WSL según disponibilidad, Docker Compose con API, frontend
+estático servido por reverse proxy y PostgreSQL con volumen persistente. Equipos acceden por red LAN, con TLS y certificado
+confiable en los clientes o configuración institucional segura. Sin conexión a internet permanente si todo está en LAN, siempre que
+la infraestructura permita el acceso.
+Ventajas: privacidad del padrón, latencia de LAN, menor dependencia del enlace externo.
+Riesgos: energía, falla de una máquina, necesidad de TLS confiable, mantenimiento y backups fuera del servidor.
+No dar por resuelto: acceso seguro desde celulares, enrutamiento Wi-Fi y certificado HTTPS.
+
+17.3 Opción B — plataforma web en la nube
+Frontend estático en servicio como Vercel o Cloudflare Pages; backend Express en servidor persistente con horas de funcionamiento
+garantizadas; PostgreSQL gestionado (por ejemplo Supabase, Neon u otro proveedor seleccionado por la institución) con
+presupuesto, conexiones y backup confirmados. Configurar HTTPS, same-site cookies o dominios del mismo sitio para reducir
+problemas de CORS/CSRF. Verificar términos y residencia/transferencia de datos antes de usar datos reales.
+Ventajas: acceso desde distintos ambientes, TLS y alta disponibilidad potencial.
+Riesgos: depender de internet escolar, límites de servicios gratuitos y terceros, jurisdicción de datos, costos y necesidad de
+configuración segura.
+
+17.4 Recomendación por hito
+    Viernes 06/11 DEMO: Docker Compose PostgreSQL + Express + React; primera opción es una LAN confiable con datos ficticios
+      o un entorno remoto exclusivamente de prueba. Si solo existe hosting gratuito, usarlo para demostración sin datos reales.
+    Lunes/martes potenciales (09/11 o 10/11): no decidir uso oficial sin resultado de pruebas, autorización y revisión de
+      infraestructura; conservar opción presencial/contingencia.
+    Elección oficial: optar por infraestructura institucional con continuidad verificada o proveedor persistente con contrato y
+      condiciones de privacidad aprobadas. No operar sobre una base efímera.
+
+17.5 Variables de entorno — contrato
+ # Solo esquema de ejemplo; nunca agregar claves reales al repositorio
+ NODE_ENV=development
+ SIVEE_ENV=demo
+ PORT=5000
+ WEB_ORIGIN=http://localhost:5173
+ API_PUBLIC_URL=http://localhost:5000
+ DATABASE_URL=postgresql://sivee_app:CHANGE_ME@localhost:5432/sivee_demo
+ DNI_LOOKUP_KEY=CHANGE_ME_RANDOM_SECRET
+ SESSION_PEPPER=CHANGE_ME_RANDOM_SECRET
+ COOKIE_SECURE=false
+ CSRF_KEY=CHANGE_ME_RANDOM_SECRET
+ POLLING_INTERVAL_MS=8000
+ MAX_BODY_BYTES=32768
+ ELECTION_TIMEZONE=America/Lima
+ LOG_LEVEL=info
+ ALLOW_DEMO_RESET=true
+
+En producción: secretos proporcionados por gestor seguro, COOKIE_SECURE=true, ALLOW_DEMO_RESET=false,
+NODE_ENV=production, orígenes HTTPS y TLS obligatorio. No introducir secretos reales en capturas, documentos, mensajes o
+repositorios.
+
+17.6 Docker Compose de ejemplo para DEMO
+ services:
+  db:
+   image: postgres:17
+   restart: unless-stopped
+   environment:
+
+
+                                                                                                          SDD v1.0 | 05/11/2026 • Página 30
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+      POSTGRES_DB: sivee_demo
+      POSTGRES_USER: sivee_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+     volumes:
+      - sivee_pg_demo:/var/lib/postgresql/data
+     healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sivee_app -d sivee_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+     networks: [internal]
+
+    api:
+     build: ./apps/api
+     restart: unless-stopped
+     env_file: .env
+     depends_on:
+      db:
+       condition: service_healthy
+     networks: [internal, web]
+
+    web:
+     build: ./apps/web
+     ports:
+      - "127.0.0.1:8080:80"
+     depends_on: [api]
+     networks: [web]
+
+ volumes:
+  sivee_pg_demo:
+
+ networks:
+  internal:
+   internal: true
+  web:
+
+Ajustes requeridos antes de ejecutar: archivos Dockerfile, proxy inverso y rutas /api, variables y contraseñas. Este fragmento es un
+diseño de despliegue, no un entorno certificado para producción. Para acceso LAN, el reverse proxy debe escuchar en interfaz
+accesible y contar con TLS verificado; no basta mapear 127.0.0.1:8080.
+
+17.7 Pipeline CI propuesto
+En cada pull request:
+64. instalación bloqueada por lockfile;
+65. pnpm lint y pnpm typecheck;
+66. pnpm test:unit;
+67. PostgreSQL efímero + migración + pnpm test:integration;
+68. pruebas de concurrencia críticas;
+69. pnpm build;
+70. inspección de dependencias y secretos;
+71. publicación de artefacto de pruebas;
+72. no despliegue automático a producción tras resultados electorales.
+Durante elección oficial, se congela la versión y se prohíbe un deploy no aprobado. Registrar SHA del commit en acta de puesta en
+producción.
+
+
+
+
+18. Operación, recuperación e incidentes
+18.1 Antes de la jornada
+Checklist del operador:
+     Confirmar resolución/autorización y reglamento.
+     Confirmar padrón oficial importado, sin errores y congelado.
+     Validar listas, números, símbolos y candidatos con Comité y personeros.
+     Verificar códigos y entrega controlada.
+     Validar certificados HTTPS, conectividad LAN/internet, NTP y zona horaria.
+     Iniciar backup verificado y comprobar restauración a instancia aislada.
+     Ejecutar voto de prueba solo en DEMO y reconciliar.
+
+
+                                                                                                      SDD v1.0 | 05/11/2026 • Página 31
+                                                                                                 SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+    Confirmar roles, MFA, turnos, horarios, contacto de emergencias y acta.
+    Registrar cantidad de dispositivos y ubicación de mesas.
+    Congelar despliegue (tag o commit SHA).
+    Confirmar plan de contingencia de la institución.
+
+18.2 Durante la jornada
+    Mesa verifica identidad de manera institucional y evita ayuda invasiva durante la selección.
+    Operador supervisa uptime, errores de API, conexiones a DB, logs técnicos redactados.
+    Docentes visualizan solo indicadores permitidos de participación.
+    Ante incidente, se pausa el turno si así lo determina el Comité; no se reinicia ni limpia la BD.
+    El registro exitoso solo se muestra después de commit.
+    No conectar capturadores de pantalla, sesiones remotas ni transmisiones del área de voto sin un diseño que preserve el
+      secreto.
+
+18.3 Después de la jornada
+    Cerrar ambas ventanas y la elección.
+    Ejecutar conciliación; si no cuadra, bloquear resultados.
+    Capturar snapshot del acta y hash.
+    Doble aprobación y publicación restringida.
+    Descargar y custodiar acta con firmas/autorizaciones.
+    Ejecutar backup final cifrado y verificar su integridad.
+    Aplicar política aprobada de conservación y eliminación.
+
+18.4 Procedimientos de incidente
+Incidente                         Detección                           Acción inmediata                       Recuperación / verificación
+
+                                                                      Pausar nuevos ingresos; informar al    Restaurar API sin tocar BD y probar
+API caída                         Healthcheck falla
+                                                                      Comité                                 conteos
+
+                                                                      No permitir votar; no mostrar falso    Restaurar conexión; verificar
+BD inaccesible                    Readiness 503
+                                                                      éxito                                  consistencia
+
+                                                                      Pausar jornada o activar contingencia Comprobar votos confirmados y
+Internet caído                    Equipos desconectados
+                                                                      autorizada                            pendientes
+
+                                                                      Reabrir en otro equipo solo tras
+Equipo compartido bloqueado       UX sin respuesta                                                           No duplicar si commit ya existió
+                                                                      consultar estado
+
+                                                                      Incidente, no alterar padrón tras
+Padrón incorrecto                 Persona no reconocida                                                      Comité determina procedimiento
+                                                                      apertura informalmente
+
+                                                                      Revocar credenciales, aislar acceso,   Aplicar protocolo legal/institucional y
+Filtración de datos               Alertas/logs/denuncia
+                                                                      contener                               evaluar notificación
+
+                                                                                                             Investigación; el Comité determina
+Fuga de resultados prematuros     Resultado visible antes de cierre   Cortar endpoint y pausar
+                                                                                                             validez del proceso
+
+                                                                                                             Auditoría forense, no borrado de
+Diferencia P≠V                    Conciliador falla                   Bloquear publicación
+                                                                                                             votos
+
+                                                                                                             Corregir reloj con control y
+Error de hora                     Apertura fuera de horario           Pausar e informar Comité
+                                                                                                             documentar
+
+Credencial admin comprometida     Acceso anómalo                      Revocar sesiones, rotar credenciales   Verificar eventos y aprobaciones
+
+
+
+
+18.5 Backups y recuperación
+Para DEMO puede bastar pg_dump cifrado y prueba de restauración. Para producción definir backups automatizados, retención,
+copia fuera del servidor, cifrado, verificación de hash, usuarios mínimos, restauración ensayada y, si se requiere RPO cercano a cero,
+replicación/PITR o infraestructura equivalente.
+Ejemplo orientativo (no introducir contraseñas en shell history):
+ pg_dump --format=custom --no-owner --file=sivee_demo.backup "$DATABASE_URL"
+ pg_restore --list sivee_demo.backup
+ # La prueba de RESTORE debe ejecutarse contra una BD temporal aislada.
+
+Regla: nunca restaurar una copia sobre la BD electoral activa sin resolución del Comité, procedimiento aprobado y análisis de votos
+confirmados después del punto del respaldo. Puede perder votos ya registrados.
+
+
+
+
+                                                                                                              SDD v1.0 | 05/11/2026 • Página 32
+                                                                                                   SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+19. Cronograma de implementación y prioridades
+Contexto temporal: jueves 05/11/2026, viernes 06/11/2026; posible elección oficial lunes 09 o martes 10/11/2026 sin fecha
+confirmada. Es una planificación de actividades, no una promesa de implementación terminada ni una garantía de aprobación.
+
+19.1 Jueves 5 — ruta crítica MVP
+Orden                            Paquete de trabajo                       Entregable                          Puerta de salida
+
+                                 Inicializar monorepo, variables de
+1                                                                         Web/API/DB arrancan, README         /health/ready exitoso
+                                 entorno y Docker Postgres
+
+                                 Definir y aplicar Prisma + SQL
+2                                                                         Tablas e índices                    Migraciones limpias desde cero
+                                 constraints
+
+                                 Generar fixtures ficticios de 2 turnos
+3                                                                         Dataset DEMO                        Seed reproducible
+                                 y 3 listas
+
+                                 Implementar admin de prueba y
+4                                                                         Login admin y guardas               Rutas privadas protegidas
+                                 permisos básicos
+
+                                 Cargar padrón demo y credenciales
+5                                                                         Importación y consulta              Duplicados rechazados
+                                 individuales
+
+                                 Implementar login elector
+6                                                                         Flujo de identidad                  No enumeración y rate limit
+                                 DNI+segundo factor
+
+7                                Implementar cédula+confirmación          UI responsive                       Una sola selección
+
+                                 Implementar voto transaccional,
+8                                                                         API de emisión                      IT-01–06 correctas
+                                 cierre y unicidad
+
+9                                Implementar ventanas mañana/tarde Controles de turno                         Tarde no vota en mañana
+
+                                 Implementar participación y
+10                                                                        Dashboard restringido               Sin lista visible pre-cierre
+                                 escrutinio con embargo
+
+                                 Implementar conciliación y
+11                                                                        Resultados finales                  Totales coinciden
+                                 publicación
+
+                                 Ejecutar E2E y prueba de estrés
+12                                                                        Evidencia de pruebas                Cero defectos críticos
+                                 básica
+
+
+No invertir el orden: el dashboard atractivo se construye después de asegurar atomicidad, turnos y permisos.
+
+19.2 Viernes 6 — simulación institucional
+Paso                             Actividad                                Participantes                       Evidencia
+
+1                                Briefing y aprobación del plan DEMO      Responsable y docentes              Lista de asistencia
+
+2                                Preparación de elección ficticia         Operador                            Captura de configuración
+
+3                                Validación de padrón y listas            Docentes sociales                   Conteos e inconsistencias = 0
+
+4                                Apertura turno mañana ficticio           Comité de simulación                Evento auditado
+
+                                 Votos de prueba (válido, blanco,                                             Registro de ejecución sin preferencia
+5                                                                         Docentes
+                                 nulo)                                                                        personal
+
+                                 Prueba de segundo voto y caída de
+6                                                                         Equipo técnico                      Resultado de prueba
+                                 red
+
+7                                Pausa y cierre mañana                    Responsable                         Estado del sistema
+
+8                                Apertura turno tarde ficticio            Responsable                         Estado del sistema
+
+                                 Cierre y verificación de resultados
+9                                                                         Auditor de prueba                   Captura sin cifras por lista
+                                 ocultos
+
+10                               Conciliación/publicación simulada        Comité de prueba                    Acta y sumas
+
+11                               Revisión UX, legibilidad, tiempos        Docentes                            Feedback consolidado
+
+                                 Clasificar defectos y decisión sobre                                         Informe GO/NO-GO para siguiente
+12                                                                        Equipo
+                                 alcance                                                                      fase
+
+
+
+
+                                                                                                               SDD v1.0 | 05/11/2026 • Página 33
+                                                                                         SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+19.3 Sábado 7 / domingo 8 — preparación condicional
+Acciones según resultado del piloto: resolver bugs P0/P1, endurecimiento, MFA, backup/restore, acceso desde aula, TLS, pruebas de
+carga con equipos reales, redacción de acta y aprobación institucional. Si no hay condiciones suficientes, mantener solo DEMO y no
+habilitar datos reales.
+
+19.4 Lunes 9 / martes 10 — elección potencial
+La fecha depende de confirmación escolar. Antes de migrar a producción debe superarse toda la lista de aceptación oficial (sección
+21). La solución técnica no puede sustituir la decisión institucional.
+
+19.5 Backlog MoSCoW
+MUST (P0): identidad con segundo factor, padrón, lista, voto válido/blanco/nulo, transacción y unicidad, turnos, embargo de
+resultados, rol administrador, conciliación y pruebas.
+SHOULD (P1): SSE, acta PDF, MFA, bitácora sofisticada, accesibilidad completa, backups automatizados, filtros agregados con
+umbral.
+COULD (P2): registro de incidencias con adjuntos, soporte multilingüe, múltiples instituciones, reportes comparativos entre años,
+exportación institucional adicional, automatización de aprobaciones.
+WON'T en MVP: biometría, auditoría E2E criptográfica certificada, integración RENIEC, app móvil nativa, redes sociales, registro de
+preferencias por estudiante.
+
+
+
+
+20. Riesgos y decisiones abiertas
+20.1 Matriz de riesgos
+ID                     Riesgo                    Prob.             Impacto               Mitigación                Responsable
+
+                      No contar con                                                      Consultar
+R-01                  autorización de            Alta              Crítico               Dirección/Comité/autori Dirección
+                      modalidad digital                                                  dad
+
+                      DNI conocido permite                                               Código individual y
+R-02                                             Alta              Crítico                                         Seguridad
+                      suplantación                                                       mesa verificada
+
+                      Fecha muy próxima para                                             Separar MVP y gate
+R-03                                         Alta                  Crítico                                         Líder técnico
+                      producción segura                                                  oficial
+
+                      Internet escolar
+R-04                                             Media             Alto                  LAN o contingencia        Infraestructura
+                      inestable
+
+                      Datos del padrón                                                   Validación importación
+R-05                                             Media             Alto                                            Secretaría
+                      incompletos                                                        temprana
+
+                      Exposición de resultados                                           Embargo en
+R-06                                           Media               Crítico                                         Backend
+                      antes del cierre                                                   backend/SSE y tests
+
+                      Votos duplicados por
+R-07                                             Media             Crítico               Locks y transacción BD    Backend
+                      concurrencia
+
+                      Filtración de datos de                                             Minimización, RBAC,
+R-08                                             Media             Crítico                                         Institución
+                      menores                                                            privacidad
+
+                                                                                         UPS, backup, plan
+R-09                  Corte de energía o BD      Media             Crítico                                         Infraestructura
+                                                                                         escrito
+
+                      Configuración de turnos                                            Revisión de Comité y
+R-10                                             Media             Alto                                            Operador
+                      equivocada                                                         simulación
+
+                      Interfaz poco clara para                                           Pruebas docentes y
+R-11                                             Media             Medio                                           UX
+                      estudiantes                                                        accesibilidad
+
+                                                                                         Redacción/
+                      Fuga por logs o
+R-12                                             Media             Alto                  anonimización, revisión   Seguridad
+                      cronología
+                                                                                         de trazas
+
+                      Cuenta admin                                                       MFA, mínimo privilegio,
+R-13                                             Media             Alto                                            Seguridad
+                      comprometida                                                       doble control
+
+                      Confusión de blanco y                                              Aprobación del Comité y
+R-14                                             Alta              Alto                                          Comité
+                      nulo digital                                                       textos oficiales
+
+                      Uso de servicio gratuito
+R-15                                             Media             Alto                  No usar en producción     Infraestructura
+                      efímero
+
+
+
+                                                                                                       SDD v1.0 | 05/11/2026 • Página 34
+                                                                                           SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+ID                       Riesgo                    Prob.              Impacto              Mitigación                 Responsable
+
+                         Desglose por sección                                              Umbral y prohibición de
+R-16                                               Media              Alto                                         Comité
+                         expone preferencias                                               preferencias por grupo
+
+                         Mala reconciliación del                                           Consultas verificables y
+R-17                                               Media              Crítico                                         Backend/Comité
+                         escrutinio                                                        acta versionada
+
+                         Resultados
+                                                                                           Etiqueta de cálculo
+R-18                     interpretados como        Media              Medio                                           Comité
+                                                                                           interno
+                         proclamación
+
+
+
+
+20.2 Preguntas que deben resolverse con el colegio
+73. ¿Una elección común para mañana/tarde o municipios distintos por turno? (configurable, pero no asumir).
+74. ¿Cuántos alumnos y cuántas mesas/dispositivos concurrentes habrá?
+75. ¿Quién entrega el padrón y con qué autorización?
+76. ¿Cuáles son las 2–4 listas definitivas y su aprobación?
+77. ¿Quiénes serán los dos autorizadores de cierre/publicación?
+78. ¿La escuela dispone de servidor LAN, internet estable, energía de respaldo y HTTPS?
+79. ¿Se acepta un código adicional al DNI distribuido presencialmente?
+80. ¿Cómo define el Comité blanco/nulo en modalidad electrónica?
+81. ¿Cuál es la fecha real de elección y cuánto dura cada jornada?
+82. ¿Qué norma/procedimiento específico autoriza el uso de la plataforma?
+83. ¿Qué mecanismo de custodia y tiempo de conservación se aprueba para el padrón?
+84. ¿Cómo se manejarán los estudiantes sin DNI o con incidencia documental?
+Para la construcción del MVP se usarán valores configurables y fixtures; la falta de respuestas no autoriza trasladar supuestos al uso
+oficial.
+
+
+
+
+21. Criterios de aceptación y entregables
+21.1 Aceptación de DEMO — viernes
+      [ ] pnpm install y arranque reproducibles siguiendo README.
+      [ ] PostgreSQL persistente y migraciones reproducibles.
+      [ ] Padrón ficticio importado, sin duplicados.
+      [ ] Al menos dos listas; prueba también con tres y cuatro.
+      [ ] DNI y código de prueba necesarios; nombre aparece solo después de autenticar.
+      [ ] Voto válido, blanco y nulo funcionando.
+      [ ] Doble clic/reintento/concurrencia: máximo uno por elector.
+      [ ] Dos turnos se abren y cierran correctamente.
+      [ ] Dashboard de participación accesible solo a autorizado.
+      [ ] Resultados por lista inalcanzables antes de publicar.
+      [ ] Conciliación P=V y V=VV+B+N exacta.
+      [ ] Dashboard y exportación de resultados ficticios post-publicación.
+      [ ] Sesión desaparece al terminar en equipo compartido.
+      [ ] Pruebas IT-01–08, IT-13–14, IT-19 completas.
+      [ ] Docentes aprueban legibilidad y flujo.
+
+21.2 Aceptación de PRODUCCIÓN — adicional y obligatoria
+      [ ] Autorización/documentación de modalidad electoral según normativa.
+      [ ] Protección de datos revisada y documentación institucional aprobada.
+      [ ] Procedimiento de autenticación presencial/códigos aprobado.
+      [ ] Roles y autorizaciones asignados a personas reales y MFA habilitada.
+      [ ] Padrón real importado, validado por el Comité y congelado.
+      [ ] Listas reales aprobadas y símbolos verificados.
+      [ ] Infraestructura/TLS/backup/restauración/contingencia probados.
+      [ ] Pruebas de concurrencia con capacidad real del colegio.
+      [ ] Inspección de endpoints, SSE, logs y BD sin filtración de preferencias.
+      [ ] Política de retención, acceso y borrado aprobada.
+      [ ] Registro del commit SHA y congelación de versión.
+
+
+                                                                                                         SDD v1.0 | 05/11/2026 • Página 35
+                                                                                          SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+      [ ] Acta de simulación y defectos críticos resueltos.
+      [ ] Autorización expresa de apertura de la jornada.
+      [ ] Procedimiento de escrutinio y actas aprobado por los responsables.
+
+21.3 Lista formal de entregables
+Código                                         Entregable                                 Destino
+
+D-01                                          SDD actualizado y aprobado                  Dirección + equipo técnico
+
+D-02                                          Repositorio web/API y migraciones           Git privado o repositorio controlado
+
+D-03                                          Manual de instalación y variables           Infraestructura
+
+D-04                                          Manual del estudiante                       Mesa / aula
+
+D-05                                          Manual de administrador y Comité            Autoridades
+
+D-06                                          Fixtures ficticios y scripts de prueba      QA
+
+D-07                                          Reporte de pruebas con evidencias           Comité / desarrollador
+
+D-08                                          Acta de simulación y lista de incidencias   Dirección
+
+D-09                                          Política de backup/recuperación             Infraestructura
+
+D-10                                          Documento de protección de datos / aviso    Institución
+
+D-11                                          Acta final digital y agregados              Comité Electoral
+
+D-12                                          Registro de versión desplegada              Operador
+
+
+
+
+22. Anexos técnicos
+Anexo A — Formato de padrón ficticio
+ dni,apellidos_nombres,grado,seccion,turno,habilitado
+ 00000001,Maria Ejemplo,3,A,MANANA,true
+ 00000002,Luis Demo,3,A,MANANA,true
+ 00000003,Ana Prueba,4,B,TARDE,true
+ 00000004,Carlos Ficticio,4,B,TARDE,true
+
+Los nombres y DNI de este ejemplo son ficticios. En producción verificar el formato autorizado y validar que los DNI reales no estén
+expuestos en logs. El archivo que contiene información real se almacena temporalmente de forma protegida y se elimina conforme
+al proceso de importación; no se guarda copia redundante en /public.
+
+Anexo B — Fixtures mínimos
+Fixture                                        Cantidad                                   Propósito
+
+Estudiantes ficticios mañana                  25                                          Probar primera ventana
+
+Estudiantes ficticios tarde                   25                                          Probar segunda ventana
+
+Listas                                        3                                           Probar resultados por lista
+
+Votos válidos                                 38                                          Verificar conteo normal
+
+Votos blancos                                 7                                           Verificar blanco
+
+Votos nulos                                   5                                           Verificar nulo
+
+Total emitido                                 50                                          Conciliación 38+7+5
+
+
+Los fixtures de emisión deberán generarse mediante el flujo oficial de DEMO (API) y no editando manualmente los totales; el
+escenario puede repartir estudiantes y opciones en forma controlada, exclusivamente con datos ficticios.
+
+Anexo C — Consultas de auditoría de integridad
+ -- Participantes frente a papeletas
+ SELECT
+   (SELECT count(*) FROM participaciones
+    WHERE eleccion_id = $1 AND estado = 'VOTO_EMITIDO') AS participantes,
+   (SELECT count(*) FROM votos
+    WHERE eleccion_id = $1) AS votos;
+
+
+
+                                                                                                           SDD v1.0 | 05/11/2026 • Página 36
+                                                                                        SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+ -- Tipos de voto: garantizar suma
+ SELECT tipo, count(*) AS cantidad
+ FROM votos
+ WHERE eleccion_id = $1
+ GROUP BY tipo
+ ORDER BY tipo;
+
+ -- Recuento total de habilitados en el padrón congelado
+ SELECT count(*) AS habilitados
+ FROM participaciones
+ WHERE eleccion_id = $1 AND estado IN ('PENDIENTE', 'VOTO_EMITIDO');
+
+ -- Papeletas inválidas por inconsistencias lógicas
+ SELECT count(*) AS inconsistencias
+ FROM votos
+ WHERE eleccion_id = $1
+   AND (
+     (tipo = 'VALIDO' AND lista_id IS NULL)
+     OR (tipo IN ('BLANCO','NULO') AND lista_id IS NOT NULL)
+   );
+
+
+Anexo D — Contrato de versiones y datos migrados
+   Se identificará cada migración con código/fecha.
+   Las migraciones oficiales se prueban en STAGING contra un backup sanitizado (no real sin permiso).
+   No modificar columnas críticas de votación durante una elección abierta.
+   Cambios de negocio (blanco/nulo, listas y turnos) requieren aprobación y registro.
+   Mantener el archivo schema.prisma, migraciones SQL y convenciones versionadas juntas.
+   El rol de API solo puede ejecutar las operaciones necesarias. La cuenta de migración tiene privilegios superiores, guardada
+     fuera del servicio.
+
+Anexo E — Modelo de permisos concreto (ejemplo)
+ type Permission =
+  | "roster:read" | "roster:write"
+  | "lists:read" | "lists:write"
+  | "elections:read" | "elections:write" | "elections:prepare"
+  | "windows:manage" | "elections:close" | "elections:approve"
+  | "turnout:read" | "results:read" | "results:reconcile"
+  | "results:publish" | "results:approve"
+  | "reports:read" | "audit:read"
+  | "incidents:read" | "incidents:write"
+  | "demo:reset";
+
+ function isAllowed(context: {
+   accountId: string;
+   institutionId: string;
+   electionId: string;
+   permission: Permission;
+   electionState: string;
+ }): boolean {
+   // Pseudocódigo: consultar los grants efectivos en BD,
+   // verificar el scoping y las guardas de estado.
+   // No confiar en valores enviados por el navegador.
+   return false; // deny-by-default
+ }
+
+
+Anexo F — Operación CLI de desarrollo sugerida
+ corepack enable
+ pnpm install
+ docker compose -f infra/compose.demo.yaml up -d db
+ pnpm --filter api prisma migrate deploy
+ pnpm --filter api seed:demo
+ pnpm dev
+ pnpm lint
+ pnpm typecheck
+ pnpm test:unit
+ pnpm test:integration
+ pnpm test:e2e
+
+Los nombres de scripts son contratos propuestos: deberán definirse en los package.json del repositorio al implementar SIVEE. No se
+declara que esos comandos ya funcionan sin haber creado el código.
+
+
+
+
+                                                                                                     SDD v1.0 | 05/11/2026 • Página 37
+                                                                                          SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+Anexo G — Matriz de evidencias para el viernes
+Captura/archivo                              Qué demuestra                                Qué se debe ocultar
+
+E01 — pantalla login                         DNI+código obligatorios                      Códigos reales
+
+E02 — confirmación identidad ficticia        Nombre/grado/turno                           DNI reales
+
+E03 — cédula 3 listas                        Igualdad de opciones y blanco/nulo           Identidad real
+
+E04 — confirmación de voto                   Revisión y cambio                            Datos del elector
+
+E05 — voto emitido                           Mensaje neutro y logout                      Selección en recibo
+
+E06 — intento duplicado                      Segundo voto rechazado                       Identificadores personales
+
+E07 — dashboard jornada                      Solo participación; preferencias ocultas     Capturas de voto
+
+E08 — cierre mañana/tarde                    FSM correcto                                 Secretos
+
+E09 — resultados finales ficticios           Totales por lista, blanco y nulo             Ningún padrón nominal
+
+E10 — conciliación SQL                       P=V y sumas                                  Connection string/password
+
+E11 — prueba concurrencia                    1 voto para 100 solicitudes mismo elector    Tokens
+
+E12 — evidencia backup/restore               Persistencia y recuperación                  Secretos de BD
+
+
+
+
+Anexo H — Definiciones
+    Voto válido: preferencia por una lista de la misma elección.
+    Voto blanco: opción digital explícita aprobada para no seleccionar una lista.
+    Voto nulo: opción digital explícita aprobada para representar nulidad; su equivalencia con cédula física requiere regla
+      institucional.
+    Sufragio único: un estudiante habilitado solo emite una papeleta por elección.
+    Padrón: conjunto previamente autorizado de electores elegibles.
+    Participación: constatación de que el alumno sufragó, sin decir qué eligió.
+    Embargo: prohibición de mostrar conteo de preferencias antes del hito autorizado.
+    SSE: Server-Sent Events, actualizaciones unidireccionales desde servidor a cliente.
+    RBAC: control de acceso basado en roles con scopes de institución/elección.
+    PITR: recuperación de BD a un punto en el tiempo.
+    RPO: pérdida de datos máxima tolerable frente a incidente.
+    RTO: tiempo objetivo para restablecer servicio.
+    Idempotencia: reintentos no provocan un segundo efecto irreversible.
+    Conciliación: verificación de igualdades entre participantes, papeletas y categorías.
+    GO/NO-GO: decisión documentada de permitir o impedir avance de fase.
+
+
+
+
+23. Referencias técnicas y normativas
+85. Ministerio de Educación del Perú. Resolución Viceministerial N.º 046-2025-MINEDU, 12 de mayo de 2025.
+     https://www.gob.pe/institucion/minedu/normas-legales/6760396-046-2025-minedu
+86. Ministerio de Educación. Campaña y orientaciones «Municipio escolar» (consulta en noviembre de 2026).
+     https://www.gob.pe/institucion/minedu/campa%C3%B1as/63346-municipio-escolar
+87. JNE. Cartilla de asistencia electoral a municipios escolares, RVM 046-2025.
+     https://dne.jne.gob.pe/DnefDocumentos/public/pdf/3.%20MUNICIPIO%20ESCOLAR/Cartilla-de-asistencia-electoral-JNE-
+     RVM-046.pdf
+88. Autoridad Nacional de Protección de Datos Personales. D. S. N.º 016-2024-JUS, Reglamento de la Ley N.º 29733.
+     https://www.gob.pe/institucion/anpd/normas-legales/6554453-n-016-2024-jus
+89. Autoridad Nacional de Protección de Datos Personales. Vigencia del reglamento desde el 31 de marzo de 2025.
+     https://www.gob.pe/institucion/anpd/campa%C3%B1as/128319-nuevo-reglamento-de-proteccion-de-datos-personales
+90. OWASP. Application Security Verification Standard, versión 5.0.0. https://asvs.owasp.org/
+91. Node.js Foundation. Política y versiones LTS. https://nodejs.org/en/about/previous-releases
+92. PostgreSQL Documentation. Transacciones, locking y constraints. https://www.postgresql.org/docs/current/
+93. Prisma Documentation. Transactions y migrations. https://www.prisma.io/docs/
+94. W3C. WCAG 2.2. https://www.w3.org/TR/WCAG22/
+
+
+
+
+                                                                                                           SDD v1.0 | 05/11/2026 • Página 38
+                                                                                        SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
+
+
+
+24. Declaración de cierre del diseño
+Este SDD proporciona una base de implementación concreta y verificable para SIVEE, con prioridad en integridad del voto,
+privacidad del estudiante, control del Comité Electoral y resultados restringidos. No certifica que una elección electrónica sea
+legalmente autorizada, que la arquitectura sea criptográficamente anónima frente a administradores hostiles ni que el sistema esté
+listo para producción antes de pasar sus pruebas. La simulación del viernes servirá para obtener evidencia técnica y pedagógica;
+cualquier uso oficial requerirá los puntos de aprobación y operación indicados en este documento.
+Próximo artefacto técnico recomendado: repositorio inicial con migraciones, controladores, páginas React, tests IT-01–20 y entorno
+Docker DEMO, implementado estrictamente sobre este SDD.
+
+
+
+
+                                                                                                    SDD v1.0 | 05/11/2026 • Página 39
+

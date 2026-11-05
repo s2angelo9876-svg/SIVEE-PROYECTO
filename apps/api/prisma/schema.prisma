@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+  engineType = "client"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model Institution {
+  id String @id @default(uuid()) @db.Uuid
+  code String @unique
+  name String
+  timezone String @default("America/Lima")
+  elections Election[]
+  students Student[]
+  admins Admin[]
+  @@map("institutions")
+}
+model Election {
+  id String @id @default(uuid()) @db.Uuid
+  institutionId String @db.Uuid
+  institution Institution @relation(fields:[institutionId],references:[id])
+  name String
+  year Int @default(2026)
+  scope String @default("Municipio escolar · Secundaria")
+  mode String @default("DEMO")
+  state String @default("BORRADOR")
+  blankAllowed Boolean @default(true)
+  nullAllowed Boolean @default(true)
+  regulation String @default("Reglamento de simulación 2026")
+  contact String @default("Solicita ayuda a tu mesa de votación.")
+  version Int @default(1)
+  openedAt DateTime?
+  closedAt DateTime?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  windows Window[]
+  lists ElectoralList[]
+  participations Participation[]
+  credentials Credential[]
+  sessions VoterSession[]
+  ballots Ballot[]
+  approvals Approval[]
+  reports Report[]
+  incidents Incident[]
+  audits Audit[]
+  @@map("elections")
+}
+model Window {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  shift String
+  state String @default("PROGRAMADA")
+  startsAt DateTime?
+  endsAt DateTime?
+  @@unique([electionId,shift])
+  @@map("windows")
+}
+model Student {
+  id String @id @default(uuid()) @db.Uuid
+  institutionId String @db.Uuid
+  institution Institution @relation(fields:[institutionId],references:[id])
+  dniLookup String
+  displayName String
+  grade String
+  section String
+  shift String
+  active Boolean @default(true)
+  participations Participation[]
+  credentials Credential[]
+  sessions VoterSession[]
+  @@unique([institutionId,dniLookup])
+  @@map("students")
+}
+model Participation {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  studentId String @db.Uuid
+  student Student @relation(fields:[studentId],references:[id])
+  shift String
+  state String @default("PENDIENTE")
+  @@unique([electionId,studentId])
+  @@map("participations")
+}
+model ElectoralList {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  number Int
+  name String
+  symbol String @default("sprout")
+  color String @default("#167568")
+  candidates Json
+  proposal String @default("")
+  active Boolean @default(true)
+  ballots Ballot[]
+  @@unique([electionId,number])
+  @@unique([id,electionId])
+  @@map("electoral_lists")
+}
+model Ballot {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  kind String
+  listId String? @db.Uuid
+  list ElectoralList? @relation(fields:[listId,electionId],references:[id,electionId])
+  @@index([electionId])
+  @@map("ballots")
+}
+model Credential {
+  id String @id @default(uuid()) @db.Uuid
+  studentId String @db.Uuid
+  student Student @relation(fields:[studentId],references:[id])
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  codeHash String
+  active Boolean @default(true)
+  attempts Int @default(0)
+  lockedUntil DateTime?
+  expiresAt DateTime
+  @@unique([electionId,studentId])
+  @@map("credentials")
+}
+model VoterSession {
+  id String @id @default(uuid()) @db.Uuid
+  tokenHash String @unique
+  studentId String @db.Uuid
+  student Student @relation(fields:[studentId],references:[id])
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  expiresAt DateTime
+  consumed Boolean @default(false)
+  revoked Boolean @default(false)
+  @@map("voter_sessions")
+}
+model Admin {
+  id String @id @default(uuid()) @db.Uuid
+  institutionId String @db.Uuid
+  institution Institution @relation(fields:[institutionId],references:[id])
+  email String @unique
+  name String
+  passwordHash String
+  active Boolean @default(true)
+  mfaSecret String?
+  mfaEnabled Boolean @default(false)
+  sessions AdminSession[]
+  grants Grant[]
+  audits Audit[]
+  @@map("admins")
+}
+model Grant {
+  id String @id @default(uuid()) @db.Uuid
+  adminId String @db.Uuid
+  admin Admin @relation(fields:[adminId],references:[id])
+  electionScope String @default("*")
+  role String
+  permissions String[]
+  @@unique([adminId,electionScope,role])
+  @@map("grants")
+}
+model AdminSession {
+  id String @id @default(uuid()) @db.Uuid
+  adminId String @db.Uuid
+  admin Admin @relation(fields:[adminId],references:[id])
+  tokenHash String @unique
+  expiresAt DateTime
+  revoked Boolean @default(false)
+  @@map("admin_sessions")
+}
+model Audit {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String? @db.Uuid
+  election Election? @relation(fields:[electionId],references:[id])
+  adminId String? @db.Uuid
+  admin Admin? @relation(fields:[adminId],references:[id])
+  action String
+  detail Json
+  createdAt DateTime @default(now())
+  @@map("audit")
+}
+model Approval {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  type String
+  requesterId String @db.Uuid
+  approverId String? @db.Uuid
+  reason String
+  state String @default("PENDING")
+  createdAt DateTime @default(now())
+  @@map("approvals")
+}
+model Report {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  version Int
+  summary Json
+  sha256 String
+  state String @default("BORRADOR")
+  approvedBy String?
+  createdAt DateTime @default(now())
+  @@unique([electionId,version])
+  @@map("reports")
+}
+model Incident {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  shift String
+  type String
+  severity String
+  description String
+  state String @default("ABIERTO")
+  createdBy String @db.Uuid
+  createdAt DateTime @default(now())
+  @@map("incidents")
+}

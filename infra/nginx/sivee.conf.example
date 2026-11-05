@@ -1,0 +1,16 @@
+# Replace domain and certificate paths; this is a deployment template, not provisioned TLS.
+server {
+    listen 443 ssl;
+    server_name elecciones.example.edu.pe;
+    ssl_certificate /etc/nginx/tls/fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/privkey.pem;
+    client_max_body_size 1m;
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        # Keep buffering off for authenticated SSE events.
+        proxy_buffering off;
+        proxy_read_timeout 65s;
+    }
+}
