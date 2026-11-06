@@ -9,8 +9,8 @@ export default defineConfig({
     baseURL: "http://localhost:5173",
     browserName: "chromium",
     launchOptions: {
-      executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
-      args: ["--no-sandbox"],
+      executablePath: process.env.CHROMIUM_PATH || undefined,
+      args: process.platform === "linux" ? ["--no-sandbox"] : [],
     },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

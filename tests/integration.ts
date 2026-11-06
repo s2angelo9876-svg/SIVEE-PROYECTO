@@ -22,7 +22,7 @@ let db: any;
 let connection: pg.Client | undefined;
 try {
   for (const script of ["scripts/migrate.ts", "apps/api/prisma/seed-demo.ts"])
-    execFileSync("pnpm", ["exec", "tsx", script], {
+    execFileSync(process.execPath, ["--import", "tsx", script], {
       env: process.env,
       stdio: "pipe",
     });
@@ -656,10 +656,14 @@ try {
         where: { id: e.institutionId },
         data: { code: "DEMO-EDITADA" },
       });
-      execFileSync("pnpm", ["exec", "tsx", "apps/api/prisma/seed-demo.ts"], {
-        env: process.env,
-        stdio: "pipe",
-      });
+      execFileSync(
+        process.execPath,
+        ["--import", "tsx", "apps/api/prisma/seed-demo.ts"],
+        {
+          env: process.env,
+          stdio: "pipe",
+        },
+      );
       assert.equal(await db.institution.count(), beforeInstitutions);
       assert.equal(await db.ballot.count(), beforeVotes);
       assert.equal(

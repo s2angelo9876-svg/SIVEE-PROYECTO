@@ -1,4 +1,4 @@
-# Merge with compose.demo.yaml after running pnpm setup:demo.
+# Merge with compose.demo.yaml after running npm run setup:demo.
 services:
   app:
     build:

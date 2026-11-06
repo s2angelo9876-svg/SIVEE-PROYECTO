@@ -4,20 +4,51 @@ Implementación del SDD del 5 de noviembre de 2026 para la **simulación con dat
 
 ## Iniciar en tu computadora
 
-Necesitas **Node.js 24**, **pnpm 11.25.0** y **Docker con Compose** (Linux, macOS o WSL2). Desde la raíz del repositorio:
+Necesitas **Node.js 24 con npm** y **Docker con Compose**. En Windows puedes usar **PowerShell directamente**, con Docker Desktop abierto y su motor de contenedores Linux listo. No necesitas ejecutar el proyecto dentro de WSL.
 
-```bash
-npm install -g pnpm@11.25.0
-pnpm install --frozen-lockfile
-pnpm setup:demo
-pnpm dev
+Desde la raíz del repositorio:
+
+```powershell
+npm install
+npm run dev
 ```
 
 Abre el navegador en `http://localhost:5173`. La API utiliza el puerto 5000 y PostgreSQL el 5432. Usa `localhost` de forma consistente: el origen está protegido contra CSRF y `127.0.0.1` representa otro origen.
 
-`setup:demo` genera claves aleatorias en `.env` solo si no existe, inicia PostgreSQL, genera Prisma, aplica migraciones y carga 50 estudiantes ficticios. Repetirlo conserva datos y credenciales. No uses `docker compose down -v`: eliminaría el volumen.
+`npm run dev` ejecuta automáticamente `setup:demo` antes de iniciar la web y la API. Genera claves aleatorias en `.env` solo si no existe, inicia PostgreSQL, genera Prisma, aplica migraciones y carga 50 estudiantes ficticios. Repetirlo conserva datos y credenciales. No uses `docker compose down -v`: eliminaría el volumen.
 
-En este entorno cloud el código está en `/workspace/SIVEE-PROYECTO`. El repositorio remoto estaba vacío al comenzar; no presupongas que los archivos ya están publicados en GitHub.
+Puedes preparar solo la base con `npm run setup:demo`. Si ya tienes PostgreSQL preparado, `npm run dev:services` inicia únicamente API y web. Para instalaciones reproducibles, usa `npm ci` en lugar de `npm install`.
+
+### Actualizar una instalación anterior
+
+Cierra el servidor anterior, abre Docker Desktop y ejecuta:
+
+```powershell
+git pull origin main
+npm install
+npm run dev
+```
+
+Si instalaste dependencias con pnpm y npm informa conflictos en `node_modules`, cierra los procesos de Node de este proyecto, elimina **solo esa carpeta generada** con `Remove-Item -Recurse -Force node_modules` y repite `npm install`. Conserva `.env` y los datos de Docker.
+
+### Si Docker no conecta en Windows
+
+El proyecto usa la conexión seleccionada por Docker Desktop; no fija un socket de Linux. Comprueba desde la misma terminal:
+
+```powershell
+docker info
+docker context ls
+docker compose version
+```
+
+Si `docker info` falla, espera a que Docker Desktop indique que el motor está iniciado. Debe usar contenedores Linux. Si configuraste antes `DOCKER_HOST` o `DOCKER_CONTEXT` para apuntar a un socket antiguo, puedes quitarlas **solo de la terminal actual**:
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CONTEXT -ErrorAction SilentlyContinue
+```
+
+Revisa `docker context ls`; si aparece `desktop-linux` y corresponde a tu Docker Desktop, selecciónalo con `docker context use desktop-linux`. Una vez que `docker info` funcione, repite `npm run dev`. Si Compose informa que el puerto 5432 está ocupado, detén la otra instancia de PostgreSQL que lo esté usando antes de reintentar.
 
 ## Accesos exclusivos de demostración
 
@@ -53,29 +84,33 @@ Empieza por la [guía de presentación](docs/DEMO.md). Consulta [operación y re
 ## Validación
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test:unit
-pnpm test:integration
-pnpm build
-pnpm test:e2e                 # requiere pnpm dev y Chromium
-pnpm exec tsx scripts/accessibility-check.ts
-pnpm backup:verify
-pnpm exec tsx scripts/production-smoke.ts
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run test:integration
+npm run build
+npx playwright install chromium
+npm run test:e2e                 # requiere npm run dev y Chromium
+npx tsx scripts/accessibility-check.ts
+npm run backup:verify
+npx tsx scripts/production-smoke.ts
 ```
 
-Las pruebas de integración crean y eliminan una base `sivee_test_*`, usando credenciales de migración. No operan sobre el padrón de la demo. Las E2E recorren la demo, archivan su elección de prueba y dejan una nueva simulación abierta. `CHROMIUM_PATH` permite indicar un ejecutable Chromium; por defecto se usa `/usr/bin/chromium`.
+Las pruebas de integración crean y eliminan una base `sivee_test_*`, usando credenciales de migración. No operan sobre el padrón de la demo. Las E2E recorren la demo, archivan su elección de prueba y dejan una nueva simulación abierta. Por defecto usan Chromium instalado por Playwright; `CHROMIUM_PATH` permite indicar otro ejecutable.
 
-`pnpm demo:scenario` ensaya 50 votos completos vía API: 38 válidos, 7 blancos y 5 nulos; archiva la simulación anterior. Úsalo solo con el padrón ficticio original. Espera un minuto entre ejecuciones para respetar los límites de autenticación.
+`npm run demo:scenario` ensaya 50 votos completos vía API: 38 válidos, 7 blancos y 5 nulos; archiva la simulación anterior. Úsalo solo con el padrón ficticio original. Espera un minuto entre ejecuciones para respetar los límites de autenticación.
 
 ## Ejecutar la compilación
 
-```bash
-pnpm build
-WEB_ORIGIN=http://localhost:5000 pnpm start
+En PowerShell:
+
+```powershell
+npm run build
+$env:WEB_ORIGIN = "http://localhost:5000"
+npm start
 ```
 
-La misma API sirve el frontend compilado. Para acceso desde otro equipo, configura el origen exacto y un proxy HTTPS institucional. El ejemplo Docker se documenta en `infra/README.md`.
+En Linux/macOS: `npm run build` y `WEB_ORIGIN=http://localhost:5000 npm start`. La misma API sirve el frontend compilado. Al volver a desarrollo en la misma PowerShell, ejecuta `Remove-Item Env:WEB_ORIGIN` para recuperar el origen de `.env`. Para acceso desde otro equipo, configura el origen exacto y un proxy HTTPS institucional. El ejemplo Docker se documenta en `infra/README.md`.
 
 ## Alcance de la entrega
 

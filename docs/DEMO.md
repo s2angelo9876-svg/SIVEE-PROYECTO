@@ -4,7 +4,7 @@ Duración sugerida: 8–12 minutos. Usa exclusivamente las cuentas ficticias. Ma
 
 ## Antes de presentar
 
-1. Ejecuta `pnpm setup:demo` y `pnpm dev` desde la raíz.
+1. Abre Docker Desktop (motor Linux); ejecuta `npm install` y `npm run dev` desde la raíz. La preparación de la base es automática.
 2. Abre `http://localhost:5173` y el acceso del comité.
 3. Inicia sesión con `comite@sivee.demo` / `DemoSivee2026!`.
 4. Revisa la elección seleccionada. Si ya tiene votos de ensayos, en **Configuración → Nueva simulación**, escribe `NUEVA SIMULACION`. La anterior se conserva archivada.
@@ -33,7 +33,7 @@ En DEMO una cuenta del comité puede solicitar y aprobar; en modo oficial la API
 
 ## Demostración con cincuenta participantes
 
-Con API iniciada, ejecuta `pnpm demo:scenario`. Crea una nueva simulación y usa el flujo de autenticación y votación para los cincuenta electores. Resultado esperado: **50 = 38 + 7 + 5**, sin abstenciones. No inserta cifras directamente en la base. La elección queda publicada para mostrar el escrutinio. Para volver a ensayar, crea una nueva simulación desde Configuración.
+Con API iniciada, ejecuta `npm run demo:scenario`. Crea una nueva simulación y usa el flujo de autenticación y votación para los cincuenta electores. Resultado esperado: **50 = 38 + 7 + 5**, sin abstenciones. No inserta cifras directamente en la base. La elección queda publicada para mostrar el escrutinio. Para volver a ensayar, crea una nueva simulación desde Configuración.
 
 ## Preguntas frecuentes
 

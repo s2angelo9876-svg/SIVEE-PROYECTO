@@ -18,7 +18,7 @@ Fuente: `docs/SDD.txt`, extracción del PDF entregado por el usuario. El archivo
 
 ## Decisiones concretas de esta implementación
 
-- pnpm centralizado en la raíz; módulos compartidos de validación en `packages/shared`. No se duplican dependencias por aplicación.
+- npm centralizado en la raíz; módulos compartidos de validación en `packages/shared`. No se duplican dependencias por aplicación.
 - Prisma 6.19 con adaptador oficial PostgreSQL y motor JavaScript; genera cliente sin el motor nativo bloqueado por la red cloud.
 - Migraciones SQL versionadas aplicadas por un runner con checksum y bloqueo asesor. No se usa `db push` ni reset.
 - Tres símbolos vectoriales locales y una estrella opcional. No hay carga de imágenes externas, archivos SVG arbitrarios ni analítica.

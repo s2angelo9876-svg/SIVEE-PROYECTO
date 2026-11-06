@@ -1,6 +1,6 @@
 # Ejecución en contenedores
 
-La ruta verificada para la presentación es PostgreSQL en Compose más `pnpm dev` en el host. `pnpm setup:demo` prepara esa combinación sin modificar datos existentes.
+La ruta verificada para la presentación es PostgreSQL en Compose más `npm run dev` en el host. `npm run setup:demo` prepara esa combinación sin modificar datos existentes.
 
 `Dockerfile` incluye una imagen de aplicación compilada, ejecutada como usuario `node`. La API sirve React y comparte el mismo origen. `compose.app.yaml` se combina con `compose.demo.yaml` para ejecutar también la app en Docker. Primero aplica migraciones y seed mediante `setup:demo`.
 

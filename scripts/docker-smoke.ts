@@ -11,7 +11,7 @@ const runtimeEnv = {
   PORT: "5000",
 };
 const docker = (args: string[]) =>
-  execFileSync("docker", ["--host=unix:///var/run/docker.sock", ...args], {
+  execFileSync("docker", args, {
     env: runtimeEnv,
     stdio: "pipe",
   });

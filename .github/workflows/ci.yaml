@@ -31,28 +31,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11.25.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate
-      - run: pnpm lint && pnpm typecheck && pnpm test:unit
-      - run: pnpm test:integration
-      - run: pnpm db:migrate && pnpm seed:demo && pnpm build
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint && npm run typecheck && npm run test:unit
+      - run: npm run test:integration
+      - run: npm run db:migrate && npm run seed:demo && npm run build
+      - run: npx playwright install --with-deps chromium
       - name: Browser tests
         shell: bash
         run: |
           mkdir -p artifacts
-          pnpm dev > artifacts/dev.log 2>&1 &
+          npm run dev:services > artifacts/dev.log 2>&1 &
           for attempt in {1..60}; do
             if curl --fail --silent http://localhost:5173/api/v1/health/ready; then break; fi
             sleep 1
           done
           export CHROMIUM_PATH="$(node --input-type=module -e 'import {chromium} from "@playwright/test"; process.stdout.write(chromium.executablePath())')"
-          pnpm test:e2e
-          pnpm exec tsx scripts/accessibility-check.ts
-      - run: pnpm audit --audit-level moderate
+          npm run test:e2e
+          npx tsx scripts/accessibility-check.ts
+      - run: npm audit --audit-level moderate
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -60,3 +57,21 @@ jobs:
           path: |
             artifacts/
             playwright-report/
+  windows-build:
+    runs-on: windows-latest
+    env:
+      # Generation does not open a database connection.
+      DATABASE_URL: postgresql://unused@localhost/sivee_demo
+      DNI_LOOKUP_KEY: ci-only-dni-lookup-key-not-for-production-2026
+      SESSION_PEPPER: ci-only-session-key-not-for-production-2026
+      CSRF_KEY: ci-only-csrf-key-not-for-production-2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run build

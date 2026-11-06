@@ -15,7 +15,7 @@ if (!fs.existsSync(".data/backup.key"))
   });
 const key = fs.readFileSync(".data/backup.key");
 const docker = (args: string[], input?: Buffer) =>
-  execFileSync("docker", ["--host=unix:///var/run/docker.sock", ...args], {
+  execFileSync("docker", args, {
     input,
     maxBuffer: 64 * 1024 * 1024,
     stdio: ["pipe", "pipe", "pipe"],

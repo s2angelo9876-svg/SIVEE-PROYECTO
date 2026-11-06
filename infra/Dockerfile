@@ -1,17 +1,14 @@
 # syntax=docker/dockerfile:1
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
+COPY package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm install --global pnpm@11.25.0 --strict-ssl=true
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN --mount=type=secret,id=proxy_ca \
-    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    pnpm install --frozen-lockfile
+    npm ci --strict-ssl=true
 COPY . .
 # Generation uses the official JS adapter; this placeholder never connects to a database.
-RUN DATABASE_URL=postgresql://unused@localhost/sivee_demo pnpm db:generate
-RUN pnpm build
+RUN DATABASE_URL=postgresql://unused@localhost/sivee_demo npm run db:generate
+RUN npm run build
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=5000

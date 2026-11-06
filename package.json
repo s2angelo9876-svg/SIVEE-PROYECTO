@@ -3,15 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22.12 <25"
   },
   "scripts": {
-    "dev": "concurrently -k -n API,WEB 'pnpm dev:api' 'pnpm dev:web'",
+    "dev": "npm run setup:demo && npm run dev:services",
+    "dev:services": "concurrently -k -n API,WEB \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "tsx watch apps/api/src/main.ts",
     "dev:web": "vite --config apps/web/vite.config.ts --host 0.0.0.0",
-    "build": "pnpm typecheck && vite build --config apps/web/vite.config.ts && node scripts/build-api.mjs",
+    "build": "npm run typecheck && vite build --config apps/web/vite.config.ts && node scripts/build-api.mjs",
     "start": "node dist/api/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -22,9 +22,18 @@
     "test:unit": "vitest run tests/unit.test.ts",
     "test:integration": "tsx tests/integration.ts",
     "test:e2e": "playwright test",
-    "test": "pnpm test:unit && pnpm test:integration",
+    "test": "npm run test:unit && npm run test:integration",
     "demo:scenario": "tsx scripts/demo-scenario.ts",
     "backup:verify": "tsx scripts/backup-verify.ts"
+  },
+  "overrides": {
+    "effect": "3.20.0",
+    "deepmerge-ts": "8.0.0",
+    "shell-quote": "1.11.0",
+    "playwright-core": "1.56.1",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
   },
   "dependencies": {
     "@prisma/adapter-pg": "6.19.0",

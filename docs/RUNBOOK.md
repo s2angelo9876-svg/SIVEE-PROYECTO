@@ -2,7 +2,7 @@
 
 ## Inicio habitual
 
-Desde la raíz: `docker compose --env-file .env -f infra/compose.demo.yaml up -d --wait db`, luego `pnpm dev`. Validar `/api/v1/health/ready`: `status=ready`, `database=connected`. En la máquina cloud usa el socket Docker administrado si existe un contexto externo: `docker --host=unix:///var/run/docker.sock ...`.
+Desde la raíz: `npm install` (primera vez), luego `npm run dev` con Docker iniciado. Prepara PostgreSQL automáticamente antes de arrancar API y web, respetando el contexto de Docker. Validar `/api/v1/health/ready`: `status=ready`, `database=connected`. Para una base ya preparada usa `npm run dev:services`. Diagnóstico de Docker Desktop en Windows: [README](../README.md#si-docker-no-conecta-en-windows).
 
 Se conservan dependencias, archivos y volumen de PostgreSQL; los procesos se reinician tras recuperar una máquina. Cada tarea cloud ya está aislada. No crees un worktree salvo petición explícita y no reemplaces el checkout por el remoto vacío.
 
@@ -20,7 +20,7 @@ La nueva simulación archiva la elección anterior como ANULADA y crea otra con 
 
 ## Respaldo verificado
 
-`pnpm backup:verify` usa `pg_dump` consistente, cifra con AES-256-GCM, restaura una copia a una base temporal y compara participaciones y papeletas. El archivo queda en `.data/backups/*.enc`, la clave local en `.data/backup.key` (0600), y la evidencia en `artifacts/backup-results.json`.
+`npm run backup:verify` usa `pg_dump` consistente, cifra con AES-256-GCM, restaura una copia a una base temporal y compara participaciones y papeletas. El archivo queda en `.data/backups/*.enc`, la clave local en `.data/backup.key` (0600), y la evidencia en `artifacts/backup-results.json`.
 
 Copia el respaldo cifrado a almacenamiento institucional y custodia la clave **por separado**. Mantener ambos solo en esta máquina no protege de la pérdida del servidor. No hay programación automática de respaldo ni PITR/replicación en la demo. La retención la debe decidir la institución.
 

@@ -2,6 +2,23 @@
 
 Entrega verificada: **05/11/2026 18:46 (Lima)**. Datos ficticios, PostgreSQL 17 real. Evidencias machine-readable en `artifacts/`.
 
+## Actualización de arranque con npm · 06/11/2026
+
+Verificada en Linux con Node 24 y Docker Compose:
+
+- Instalación con `npm install` y `npm ci`; bloqueo npm con binarios opcionales para Windows.
+- `npm run dev` prepara PostgreSQL y levanta API y Vite; salud, frontend y acceso del comité comprobados.
+- Repetir la preparación conserva `.env`, estados electorales, participaciones y papeletas.
+- Un contexto Docker inexistente devuelve un mensaje de diagnóstico y código 1, sin forzar otro daemon ni modificar `.env`.
+- El comando rechaza entornos y conexiones de migración ajenos a la demo antes de operar sobre la base.
+- ESLint, TypeScript, compilación, 21 pruebas unitarias, 25 comprobaciones de integración y 2 pruebas Playwright aprobadas; Axe sin incidencias en las cuatro pantallas verificadas.
+- Auditoría npm: cero vulnerabilidades con el nuevo bloqueo.
+- Imagen Docker compilada con `npm ci`: salud, login, frontend y usuario sin privilegios verificados. Respaldo cifrado restaurado y conciliado usando el contexto Docker configurado.
+
+Evidencia del arranque: `artifacts/npm-start-results.json`. Se añadió un job de instalación, generación Prisma, pruebas unitarias y compilación en Windows a GitHub Actions. Esta validación local no ejecutó Windows ni Docker Desktop; el job de Windows debe verificarse en GitHub.
+
+## Validación de la entrega inicial
+
 | Comprobación                            | Resultado observado                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------ |
 | TypeScript y ESLint                     | Sin errores                                                              |
