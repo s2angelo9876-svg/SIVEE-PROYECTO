@@ -23,7 +23,6 @@ import {
   Square,
   RefreshCw,
   Download,
-  Upload,
   Plus,
   FileText,
   AlertTriangle,
@@ -48,12 +47,11 @@ import {
   dateFormat,
   shiftLabel,
   downloadText,
-  csvCell,
 } from "./lib";
 import { Brand } from "./Public";
 import { hasPermission } from "../../../packages/shared/domain";
 const AdminContext = createContext<any>(null);
-function useAdmin() {
+export function useAdmin() {
   return useContext(AdminContext);
 }
 export function AdminLogin() {
@@ -278,7 +276,11 @@ export function AdminShell() {
       value={{ user, elections, election, id, setId, refresh: load, can }}
     >
       <div className="admin-layout">
-        <aside className={"sidebar " + (mobile ? "is-open" : "")}>
+        <aside
+          className={"sidebar " + (mobile ? "is-open" : "")}
+          aria-label="Menú de administración"
+          tabIndex={0}
+        >
           <Brand />
           <button
             className="mobile-close"
@@ -910,331 +912,6 @@ export function ElectionDay() {
           </div>
           {error && <Notice>{error}</Notice>}
         </Modal>
-      )}
-    </>
-  );
-}
-export function Roster() {
-  const { id, election, can } = useAdmin();
-  const [summary, setSummary] = useState<any>();
-  const [csv, setCsv] = useState("");
-  const [preview, setPreview] = useState<any>();
-  const [issued, setIssued] = useState<any>();
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [dni, setDni] = useState("");
-  const [student, setStudent] = useState<any>();
-  const [searched, setSearched] = useState(false);
-  const load = () =>
-    api(`/admin/elections/${id}/roster/summary`).then(setSummary);
-  useEffect(() => {
-    if (id) void load().catch((e) => setError(e.message));
-    setPreview(undefined);
-    setIssued(undefined);
-    setCsv("");
-  }, [id]);
-  if (!election) return <Empty>Crea una elección.</Empty>;
-  const edit = can("roster:write") && election.state === "BORRADOR";
-  async function run(fn: () => Promise<void>) {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <PageTitle
-        title="Cada estudiante, una voz"
-        description="Administra el padrón y verifica quiénes están habilitados."
-        action={
-          <button
-            className="button secondary"
-            onClick={() =>
-              downloadText(
-                "plantilla-padron.csv",
-                "dni,apellidos_nombres,grado,seccion,turno,habilitado\n00000101,Estudiante Ejemplo,3,A,MANANA,true\n00000102,Estudiante Demo,4,B,TARDE,true\n",
-                "text/csv",
-              )
-            }
-          >
-            <Download size={16} /> Plantilla CSV
-          </button>
-        }
-      />
-      {error && <Notice>{error}</Notice>}
-      {summary && (
-        <div className="compact-stats">
-          <span>
-            <strong>{summary.eligible}</strong> habilitados
-          </span>
-          <span>
-            <strong>{summary.voted}</strong> participaron
-          </span>
-          <span>
-            <strong>{summary.remaining}</strong> pendientes
-          </span>
-        </div>
-      )}
-      <div className="two-columns">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Importar padrón</h2>
-              <p>CSV UTF-8 · hasta 5000 filas</p>
-            </div>
-            <Upload size={22} />
-          </div>
-          {edit ? (
-            <>
-              <label className="upload-zone">
-                <Upload size={29} />
-                <strong>Selecciona tu archivo CSV</strong>
-                <span>
-                  Documento, nombre, grado, sección, turno y habilitación
-                </span>
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={async (e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    if (f.size > 900000) {
-                      setError("El archivo supera el tamaño permitido.");
-                      return;
-                    }
-                    setCsv(await f.text());
-                    setPreview(undefined);
-                    setIssued(undefined);
-                  }}
-                />
-              </label>
-              <button
-                className="button full"
-                disabled={!csv || busy}
-                onClick={() =>
-                  void run(async () =>
-                    setPreview(
-                      await api(
-                        `/admin/elections/${id}/roster/import-preview`,
-                        { method: "POST", body: { csv } },
-                      ),
-                    ),
-                  )
-                }
-              >
-                Validar archivo
-              </button>
-            </>
-          ) : (
-            <div className="locked-note">
-              <LockKeyhole />
-              <p>
-                El padrón está protegido. Los cambios se permiten en preparación
-                y con permiso de operador.
-              </p>
-            </div>
-          )}
-        </section>
-        <section className="panel">
-          <h2>Consultar un elector</h2>
-          <p>Consulta limitada a esta elección, sin preferencias.</p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(async () => {
-                setStudent(
-                  await api(`/admin/elections/${id}/roster/search`, {
-                    method: "POST",
-                    body: { dni },
-                  }),
-                );
-                setSearched(true);
-                setDni("");
-              });
-            }}
-          >
-            <Field label="Documento de prueba">
-              <input
-                inputMode="numeric"
-                pattern="[0-9]{8}"
-                maxLength={8}
-                value={dni}
-                onChange={(e) => setDni(e.target.value)}
-                required
-                autoComplete="off"
-              />
-            </Field>
-            <button className="button secondary" disabled={busy}>
-              Consultar
-            </button>
-          </form>
-          {searched &&
-            (student ? (
-              <div className="student-result">
-                <strong>{student.displayName}</strong>
-                <p>
-                  {student.grade}° {student.section} ·{" "}
-                  {shiftLabel(student.shift)}
-                </p>
-                <Badge
-                  state={
-                    student.state === "VOTO_EMITIDO"
-                      ? "Participación registrada"
-                      : student.state === "PENDIENTE"
-                        ? "Habilitado"
-                        : "No habilitado"
-                  }
-                />
-                {edit && (
-                  <button
-                    className="button text"
-                    onClick={() =>
-                      void run(async () => {
-                        await api(
-                          `/admin/elections/${id}/roster/${student.id}`,
-                          {
-                            method: "PATCH",
-                            body: {
-                              enabled: student.state === "ANULADA_POR_COMITE",
-                            },
-                          },
-                        );
-                        setSearched(false);
-                        await load();
-                      })
-                    }
-                  >
-                    {student.state === "ANULADA_POR_COMITE"
-                      ? "Habilitar"
-                      : "Deshabilitar"}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p>No hay coincidencias en esta elección.</p>
-            ))}
-        </section>
-      </div>
-      {preview && (
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <h2>Vista previa de importación</h2>
-              <p>
-                {preview.total} filas · {preview.errors.length} errores
-              </p>
-            </div>
-            {!preview.errors.length && (
-              <button
-                className="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    setIssued(
-                      await api(`/admin/elections/${id}/roster/import-commit`, {
-                        method: "POST",
-                        body: { csv },
-                      }),
-                    );
-                    setCsv("");
-                    setPreview(undefined);
-                    await load();
-                  })
-                }
-              >
-                Confirmar importación
-              </button>
-            )}
-          </div>
-          {preview.errors.length > 0 ? (
-            <>
-              <Notice>
-                Corrige todas las filas y carga nuevamente el archivo. No se
-                importará un padrón parcial.
-              </Notice>
-              <button
-                className="button secondary"
-                onClick={() =>
-                  downloadText(
-                    "errores-padron.csv",
-                    "fila,error\n" +
-                      preview.errors
-                        .map((e: any) => `${e.row},${csvCell(e.message)}`)
-                        .join("\n"),
-                    "text/csv",
-                  )
-                }
-              >
-                Descargar errores
-              </button>
-              <ul>
-                {preview.errors.map((e: any, i: number) => (
-                  <li key={i}>
-                    Fila {e.row}: {e.message}
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fila</th>
-                    <th>Nombre</th>
-                    <th>Grado / sección</th>
-                    <th>Turno</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.preview.map((r: any) => (
-                    <tr key={r.row}>
-                      <td>{r.row}</td>
-                      <td>{r.name}</td>
-                      <td>
-                        {r.grade}° {r.section}
-                      </td>
-                      <td>{shiftLabel(r.shift)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      )}
-      {issued && (
-        <section className="panel">
-          <Notice success>
-            {issued.count} electores importados. Descarga sus códigos ahora; no
-            se mostrarán nuevamente al salir.
-          </Notice>
-          <button
-            className="button"
-            onClick={() => {
-              downloadText(
-                "credenciales-simulacion.csv",
-                "fila,nombre,turno,codigo\n" +
-                  issued.credentials
-                    .map((r: any) =>
-                      [r.row, r.displayName, r.shift, r.accessCode]
-                        .map(csvCell)
-                        .join(","),
-                    )
-                    .join("\n"),
-                "text/csv",
-              );
-              setIssued(undefined);
-            }}
-          >
-            <Download size={17} /> Descargar códigos individuales
-          </button>
-        </section>
       )}
     </>
   );
@@ -1921,6 +1598,7 @@ const auditLabels: Record<string, string> = {
   PUBLISH_REQUESTED: "Publicación solicitada",
   PUBLISH_APPROVED: "Publicación autorizada",
   ROSTER_IMPORTED: "Padrón importado",
+  CREDENTIALS_REISSUED: "Códigos de acceso reemitidos",
   LIST_CREATED: "Lista registrada",
   LIST_UPDATED: "Lista actualizada",
   ELECTION_UPDATED: "Configuración actualizada",

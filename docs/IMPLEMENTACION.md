@@ -7,7 +7,7 @@ Fuente: `docs/SDD.txt`, extracción del PDF entregado por el usuario. El archivo
 | Requisitos             | Implementación                                                                                                                                                  |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | RF-001/002/007/008/010 | Elecciones configurables, turnos, listas/candidaturas, preparación y congelación. Institución editable antes de iniciar jornadas, creada inicialmente por seed. |
-| RF-003/004/005/006     | CSV con preview, errores por fila, importación atómica, códigos aleatorios, búsqueda y habilitación en borrador.                                                |
+| RF-003/004/005/006     | Excel/CSV y alta individual en borrador; validación por fila, importación atómica, historial idempotente, reemisión auditada y datos conservados por elección.  |
 | RF-009                 | Guardas de nombres de base y entorno, seed y reinicio restringidos a demo/test; producción requiere infraestructura separada.                                   |
 | RF-011–022             | Documento+código, Argon2id, HMAC, elegibilidad, flujo guiado, sesión corta, voto atómico único y reintentos neutros.                                            |
 | RF-023–029/032         | Estados y turnos, bloqueo de voto fuera de ventana, conteo de BD, embargo, conciliación y publicación.                                                          |
@@ -22,7 +22,7 @@ Fuente: `docs/SDD.txt`, extracción del PDF entregado por el usuario. El archivo
 - Prisma 6.19 con adaptador oficial PostgreSQL y motor JavaScript; genera cliente sin el motor nativo bloqueado por la red cloud.
 - Migraciones SQL versionadas aplicadas por un runner con checksum y bloqueo asesor. No se usa `db push` ni reset.
 - Tres símbolos vectoriales locales y una estrella opcional. No hay carga de imágenes externas, archivos SVG arbitrarios ni analítica.
-- CSV se envía como texto en JSON, con límite de tamaño. No se guarda una copia del padrón en public.
+- CSV se envía como texto y Excel como base64 en JSON, con límites de tamaño y expansión. Se rechazan fórmulas en las columnas importadas. No se guardan los archivos originales ni una copia del padrón en public.
 - Recuento se deriva de las papeletas persistentes. No se duplica un contador mutable por lista ni se publican preferencias por SSE.
 - Reiniciar conserva la elección anterior; no elimina la urna. Los códigos de demo pueden reutilizarse en la nueva elección.
 - Los horarios opcionales se editan en hora de Lima y se validan en la emisión. La apertura/cierre administrativo continúa bajo control manual del comité; no hay un programador de apertura automática.

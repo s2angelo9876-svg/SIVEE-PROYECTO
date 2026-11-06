@@ -21,7 +21,10 @@ La sesión consumida solo permite reconocer participación/reintentos hasta el l
 - `POST /admin/elections/:id/windows/:shift/open|pause|close` — `{reason}`.
 - `POST /admin/elections/:id/close-request|publish-request` — `{reason}`; correspondientes `close-approve|publish-approve` — `{approvalId}`.
 - `POST /admin/elections/:id/reconcile` — devuelve integridad, no preferencias antes de publicación.
-- `POST /admin/elections/:id/roster/import-preview|import-commit` — `{csv}`. Se transporta el texto CSV como JSON; no multipart. Los códigos de la importación solo se entregan una vez.
+- `POST /admin/elections/:id/roster/file-inspect|import-preview|import-commit` — CSV, Excel o registro individual; contrato detallado abajo.
+- `GET .../roster/template.xlsx` — plantilla Excel con DNI como texto; permiso `roster:write`.
+- `GET .../roster/imports` — últimos 50 comprobantes de carga; sin códigos ni DNI; permiso `roster:write`.
+- `POST .../roster/reissue` — `{studentId,reason}` o `{batchId,reason}` (exactamente uno). Motivo de 10–300 caracteres; `roster:write` y alcance institucional.
 - `GET /admin/elections/:id/roster/summary`; `POST .../roster/search` — `{dni}`; `PATCH .../roster/:studentId` — `{enabled}`.
 - `GET/POST .../lists`; `PATCH .../lists/:listId`.
 - `GET .../turnout`, `.../events` — SSE privado `turnout.updated`, ID monotónico por versión electoral/participación. Siempre contiene únicamente participación; el cliente consulta resultados por otra ruta autorizada.
@@ -38,3 +41,15 @@ Orden de bloqueo: elección → ventana → participación. Emisión usa FOR SHA
 Los endpoints de preferencias usan una guarda de PUBLICADA y verifican el hash del acta. Ningún desglose de preferencias por turno/grupo pequeño se exporta. Los permisos se comprueban en servidor por institución y alcance de elección.
 
 Configuración adicional: `GET/PATCH /admin/institution` y `PATCH /admin/elections/:id/windows/:shift` con `{startsAt,endsAt}` (ISO UTC o null), solo en BORRADOR.
+
+## Padrón
+
+Los tres endpoints de inspección, vista previa y confirmación reciben exactamente una fuente: `{csv: texto}`, `{file:{name,base64}}` para `.xlsx`, o `{individual:{dni,apellidos_nombres,grado,seccion,turno,habilitado}}`. Todo se transporta en JSON. Límite JSON del prefijo roster: 8 MB; el Excel decodificado admite hasta 5 MB. La inspección devuelve hojas, encabezados, asociación sugerida, muestra y avisos; no guarda datos.
+
+Opciones: `sheet`, `headerRow` (1–50, predeterminado 1), `mapping` con las seis claves del padrón y sus índices de columna desde cero, `skipExisting`, `updateProfiles` y `reason`. La actualización institucional requiere confirmación y motivo de al menos diez caracteres; conserva las instantáneas de participaciones anteriores.
+
+El cliente envía un UUID `requestId` estable al confirmar. Un reintento con la misma identidad y contenido devuelve `alreadyImported:true`, `batchId`, cantidad y `credentials:[]`; un contenido diferente con el mismo UUID devuelve 409. Los clientes CSV antiguos sin UUID siguen aceptándose, pero no disponen de ese comprobante idempotente propio. La primera respuesta entrega los códigos en memoria; no se guardan en texto claro. La nueva interfaz conserva el UUID mientras reintenta y permite consultar el historial tras recargar.
+
+La vista previa devuelve `total`, `valid`, `invalid`, `newCount`, `skipped`, errores por fila/campo, cambios institucionales, avisos y vigencia prevista. Cuenta filas únicas con error, no cantidad de mensajes. Muestra como máximo 100 filas; valida el lote completo. Una confirmación con cualquier error no guarda filas.
+
+Reemisión: por lote únicamente en BORRADOR; individual también en PREPARADA/EN_CURSO/PAUSADA, para electores pendientes habilitados con turno no cerrado. Toma bloqueo exclusivo de elección, vuelve a comprobar condiciones, reemplaza hashes y revoca sesiones en una transacción. Los accesos y votos vuelven a comprobar la credencial/sesión tras adquirir su bloqueo para evitar carreras con la reemisión. Los motivos se auditan sin incluir códigos ni papeletas.

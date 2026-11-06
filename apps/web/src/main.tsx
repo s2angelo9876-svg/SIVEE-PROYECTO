@@ -7,7 +7,6 @@ import {
   AdminShell,
   Dashboard,
   ElectionDay,
-  Roster,
   Lists,
   Results,
   Settings,
@@ -16,6 +15,7 @@ import {
   Security,
   Accounts,
 } from "./Admin";
+import { Roster } from "./Roster";
 import "./styles.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

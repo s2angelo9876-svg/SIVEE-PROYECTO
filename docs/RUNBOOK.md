@@ -4,7 +4,7 @@
 
 Desde la raíz: `npm install` (primera vez), luego `npm run dev` con Docker iniciado. Prepara PostgreSQL automáticamente antes de arrancar API y web, respetando el contexto de Docker. Validar `/api/v1/health/ready`: `status=ready`, `database=connected`. Para una base ya preparada usa `npm run dev:services`. Diagnóstico de Docker Desktop en Windows: [README](../README.md#si-docker-no-conecta-en-windows).
 
-Se conservan dependencias, archivos y volumen de PostgreSQL; los procesos se reinician tras recuperar una máquina. Cada tarea cloud ya está aislada. No crees un worktree salvo petición explícita y no reemplaces el checkout por el remoto vacío.
+Se conservan dependencias, archivos y volumen de PostgreSQL; los procesos se reinician tras recuperar una máquina. Cada tarea cloud ya está aislada. No crees un worktree salvo petición explícita y no descartes el trabajo local.
 
 ## Variables
 
@@ -17,6 +17,8 @@ La clave HMAC de DNI no puede rotarse arbitrariamente: las búsquedas dejarían 
 BORRADOR → PREPARADA → EN_CURSO/PAUSADA → CERRADA → CONCILIADA → PUBLICADA. Las ventanas se cierran una vez. Los cambios de padrón y listas se permiten en BORRADOR. Solo un turno de la misma elección está abierto a la vez y mañana debe terminar antes de tarde.
 
 La nueva simulación archiva la elección anterior como ANULADA y crea otra con el mismo padrón/códigos y listas. No elimina papeletas. Solo está disponible en la base DEMO y con `ALLOW_DEMO_RESET=true`.
+
+La carga Excel/CSV y el registro individual siguen limitados a BORRADOR. Si una importación pierde su respuesta, consulta el historial de cargas. La reemisión de códigos por lote se limita a BORRADOR; la individual admite una jornada abierta solo para electores pendientes con turno sin cerrar. Revoca códigos y sesiones anteriores sin modificar votos. Procedimiento completo: [gestión del padrón](PADRON.md).
 
 ## Respaldo verificado
 

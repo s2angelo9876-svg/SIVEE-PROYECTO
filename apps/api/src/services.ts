@@ -1,17 +1,8 @@
 import { Prisma } from "@prisma/client";
-import crypto from "node:crypto";
-import { parse } from "csv-parse/sync";
 import { db } from "./db.js";
-import {
-  AppError,
-  requireState,
-  dniLookup,
-  passwordHash,
-  digest,
-} from "./security.js";
+import { AppError, requireState, digest } from "./security.js";
 import {
   voteSchema,
-  rosterRowSchema,
   assertReconciled,
   electoralOutcome,
 } from "../../../packages/shared/domain.js";
@@ -116,6 +107,20 @@ export async function castVote(sessionId: string, raw: unknown) {
       )
         throw new AppError(401, "UNAUTHENTICATED", "La sesión ha vencido.");
       const e = await lockElection(tx, initial.electionId);
+      // Credential rotation may have revoked this session while we waited for the lock.
+      const currentSession = await tx.voterSession.findUnique({
+        where: { id: sessionId },
+      });
+      if (
+        !currentSession ||
+        currentSession.revoked ||
+        +currentSession.expiresAt < Date.now()
+      )
+        throw new AppError(
+          401,
+          "UNAUTHENTICATED",
+          "La sesión ha vencido. Identifícate con tu código vigente.",
+        );
       const p = await tx.participation.findUnique({
         where: {
           electionId_studentId: {
@@ -179,178 +184,6 @@ export async function castVote(sessionId: string, raw: unknown) {
       return { status: "RECORDED" };
     },
     { timeout: 20000 },
-  );
-}
-export function parseRoster(csv: string) {
-  let raw: unknown[];
-  try {
-    raw = parse(csv, {
-      columns: true,
-      bom: true,
-      skip_empty_lines: true,
-      trim: true,
-      max_record_size: 2048,
-    });
-  } catch {
-    throw new AppError(
-      400,
-      "INVALID_CSV",
-      "El archivo CSV no tiene un formato válido.",
-    );
-  }
-  if (!raw.length || raw.length > 5000)
-    throw new AppError(400, "INVALID_CSV", "Importa entre 1 y 5000 filas.");
-  const rows: zRow[] = [];
-  const errors: { row: number; message: string }[] = [];
-  const seen = new Set<string>();
-  raw.forEach((value, i) => {
-    const r = rosterRowSchema.safeParse(value);
-    if (!r.success) {
-      errors.push({
-        row: i + 2,
-        message:
-          "Revisa documento (8 dígitos), nombre, grado 1–6, sección, turno y habilitado true/false.",
-      });
-      return;
-    }
-    if (seen.has(r.data.dni)) {
-      errors.push({
-        row: i + 2,
-        message: "Documento duplicado en el archivo.",
-      });
-      return;
-    }
-    seen.add(r.data.dni);
-    rows.push(r.data);
-  });
-  return { rows, errors };
-}
-type zRow = {
-  dni: string;
-  apellidos_nombres: string;
-  grado: string;
-  seccion: string;
-  turno: "MANANA" | "TARDE";
-  habilitado: "true" | "false";
-};
-export async function checkRoster(
-  tx: Tx,
-  e: { id: string; institutionId: string; windows: { shift: string }[] },
-  rows: zRow[],
-) {
-  const errors: { row: number; message: string }[] = [];
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    if (!e.windows.some((w) => w.shift === r.turno))
-      errors.push({ row: i + 2, message: "Turno no incluido en la elección." });
-    const student = await tx.student.findUnique({
-      where: {
-        institutionId_dniLookup: {
-          institutionId: e.institutionId,
-          dniLookup: dniLookup(r.dni),
-        },
-      },
-    });
-    if (student) {
-      if (
-        await tx.participation.findUnique({
-          where: {
-            electionId_studentId: { electionId: e.id, studentId: student.id },
-          },
-        })
-      )
-        errors.push({
-          row: i + 2,
-          message: "Este elector ya está inscrito en la elección.",
-        });
-      else if (
-        student.displayName !== r.apellidos_nombres ||
-        student.grade !== r.grado ||
-        student.section !== r.seccion ||
-        student.shift !== r.turno
-      )
-        errors.push({
-          row: i + 2,
-          message:
-            "Los datos no coinciden con el padrón institucional existente.",
-        });
-    }
-  }
-  return errors;
-}
-export async function importRoster(
-  electionId: string,
-  adminId: string,
-  csv: string,
-) {
-  const { rows, errors } = parseRoster(csv);
-  if (errors.length)
-    throw new AppError(
-      400,
-      "INVALID_CSV",
-      "Corrige todas las filas antes de importar.",
-    );
-  const credentials = await Promise.all(
-    rows.map(async () => {
-      const code = crypto.randomBytes(9).toString("base64url");
-      return { code, hash: await passwordHash(code) };
-    }),
-  );
-  return db.$transaction(
-    async (tx) => {
-      const e = await lockElection(tx, electionId, true);
-      requireState(e.state === "BORRADOR");
-      const invalid = await checkRoster(tx, e, rows);
-      if (invalid.length)
-        throw new AppError(409, "INVALID_CSV", invalid[0].message);
-      const issued = [];
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const student = await tx.student.upsert({
-          where: {
-            institutionId_dniLookup: {
-              institutionId: e.institutionId,
-              dniLookup: dniLookup(r.dni),
-            },
-          },
-          create: {
-            institutionId: e.institutionId,
-            dniLookup: dniLookup(r.dni),
-            displayName: r.apellidos_nombres,
-            grade: r.grado,
-            section: r.seccion,
-            shift: r.turno,
-          },
-          update: {},
-        });
-        await tx.participation.create({
-          data: {
-            electionId: e.id,
-            studentId: student.id,
-            shift: r.turno,
-            state: r.habilitado === "true" ? "PENDIENTE" : "ANULADA_POR_COMITE",
-          },
-        });
-        await tx.credential.create({
-          data: {
-            electionId: e.id,
-            studentId: student.id,
-            codeHash: credentials[i].hash,
-            active: r.habilitado === "true",
-            expiresAt: new Date(Date.now() + 30 * 86400000),
-          },
-        });
-        issued.push({
-          row: i + 2,
-          displayName: r.apellidos_nombres,
-          accessCode: credentials[i].code,
-          shift: r.turno,
-        });
-      }
-      await audit(tx, adminId, e.id, "ROSTER_IMPORTED", { count: rows.length });
-      return { count: rows.length, credentials: issued };
-    },
-    { timeout: 60000 },
   );
 }
 export async function reconcile(tx: Tx, id: string, adminId: string) {

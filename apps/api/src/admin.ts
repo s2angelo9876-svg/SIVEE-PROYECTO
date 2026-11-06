@@ -18,15 +18,19 @@ import {
   shiftSchema,
   hasPermission,
 } from "../../../packages/shared/domain.js";
+import { audit, lockElection, turnout, reconcile } from "./services.js";
 import {
-  audit,
-  lockElection,
-  turnout,
-  reconcile,
-  parseRoster,
-  checkRoster,
+  rosterInputSchema,
+  inspectRoster,
+  rosterTemplate,
+} from "./roster-files.js";
+import {
+  previewRoster,
   importRoster,
-} from "./services.js";
+  importHistory,
+  reissueCodes,
+  credentialExpiry,
+} from "./roster.js";
 export const admin = Router();
 const dummyHash = await passwordHash("invalid-admin-password");
 admin.post(
@@ -177,6 +181,12 @@ admin.patch(
           startsAt: startsAt ? new Date(startsAt) : null,
           endsAt: endsAt ? new Date(endsAt) : null,
         },
+      });
+      const windows = await tx.window.findMany({ where: { electionId: e.id } });
+      const expiry = credentialExpiry(windows);
+      await tx.credential.updateMany({
+        where: { electionId: e.id, active: true, expiresAt: { lt: expiry } },
+        data: { expiresAt: expiry },
       });
       await audit(tx, res.locals.admin.id, e.id, "WINDOW_SCHEDULE_UPDATED", {
         shift,
@@ -504,40 +514,38 @@ admin.get(
     res.json({ data: { ...(await turnout(db, id)), shifts } });
   },
 );
+admin.get(
+  "/elections/:id/roster/template.xlsx",
+  permit("roster:write"),
+  async (_req, res) => {
+    res.set(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.set(
+      "Content-Disposition",
+      'attachment; filename="plantilla-padron.xlsx"',
+    );
+    res.send(Buffer.from(await rosterTemplate()));
+  },
+);
+admin.post(
+  "/elections/:id/roster/file-inspect",
+  permit("roster:write"),
+  async (req, res) => {
+    requireState(res.locals.election.state === "BORRADOR");
+    res.json({ data: await inspectRoster(rosterInputSchema.parse(req.body)) });
+  },
+);
 admin.post(
   "/elections/:id/roster/import-preview",
   permit("roster:write"),
   async (req, res) => {
-    const { csv } = z
-      .object({ csv: z.string().max(900000) })
-      .strict()
-      .parse(req.body);
-    const e = await db.election.findUniqueOrThrow({
-      where: { id: String(req.params.id) },
-      include: { windows: true },
-    });
-    requireState(e.state === "BORRADOR");
-    const parsed = parseRoster(csv);
-    const errors = [
-      ...parsed.errors,
-      ...(await checkRoster(db, e, parsed.rows)),
-    ];
     res.json({
-      data: {
-        total: parsed.rows.length + parsed.errors.length,
-        valid: parsed.rows.length - errors.length,
-        errors,
-        preview: parsed.rows
-          .slice(0, 8)
-          .map((r, i) => ({
-            row: i + 2,
-            name: r.apellidos_nombres,
-            grade: r.grado,
-            section: r.seccion,
-            shift: r.turno,
-            enabled: r.habilitado === "true",
-          })),
-      },
+      data: await previewRoster(
+        String(req.params.id),
+        rosterInputSchema.parse(req.body),
+      ),
     });
   },
 );
@@ -545,12 +553,41 @@ admin.post(
   "/elections/:id/roster/import-commit",
   permit("roster:write"),
   async (req, res) => {
-    const { csv } = z
-      .object({ csv: z.string().max(900000) })
+    res.json({
+      data: await importRoster(
+        String(req.params.id),
+        res.locals.admin.id,
+        rosterInputSchema.parse(req.body),
+      ),
+    });
+  },
+);
+admin.get(
+  "/elections/:id/roster/imports",
+  permit("roster:write"),
+  async (req, res) => {
+    res.json({ data: await importHistory(String(req.params.id)) });
+  },
+);
+admin.post(
+  "/elections/:id/roster/reissue",
+  permit("roster:write"),
+  async (req, res) => {
+    const input = z
+      .object({
+        studentId: z.uuid().optional(),
+        batchId: z.uuid().optional(),
+        reason: z.string().trim().min(10).max(300),
+      })
       .strict()
+      .refine((v) => !!v.studentId !== !!v.batchId)
       .parse(req.body);
     res.json({
-      data: await importRoster(String(req.params.id), res.locals.admin.id, csv),
+      data: await reissueCodes(
+        String(req.params.id),
+        res.locals.admin.id,
+        input,
+      ),
     });
   },
 );
@@ -613,11 +650,20 @@ admin.post(
         p && student
           ? {
               id: student.id,
-              displayName: student.displayName,
-              grade: student.grade,
-              section: student.section,
+              displayName: p.displayName,
+              grade: p.grade,
+              section: p.section,
               shift: p.shift,
               state: p.state,
+              credential: await db.credential.findUnique({
+                where: {
+                  electionId_studentId: {
+                    electionId: String(req.params.id),
+                    studentId: student.id,
+                  },
+                },
+                select: { expiresAt: true, lockedUntil: true, active: true },
+              }),
             }
           : null,
     });
@@ -1007,6 +1053,9 @@ admin.post("/demo/:id/reset", permit("demo:reset"), async (req, res) => {
             electionId: e.id,
             studentId: p.studentId,
             shift: p.shift,
+            displayName: p.displayName,
+            grade: p.grade,
+            section: p.section,
             state:
               p.state === "ANULADA_POR_COMITE"
                 ? "ANULADA_POR_COMITE"

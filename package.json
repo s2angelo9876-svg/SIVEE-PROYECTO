@@ -19,14 +19,17 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "seed:demo": "tsx apps/api/prisma/seed-demo.ts",
     "setup:demo": "tsx scripts/setup-demo.ts",
-    "test:unit": "vitest run tests/unit.test.ts",
-    "test:integration": "tsx tests/integration.ts",
+    "test:unit": "vitest run tests/unit.test.ts tests/roster.test.ts",
+    "test:integration": "tsx tests/integration.ts && tsx tests/roster.integration.ts",
     "test:e2e": "playwright test",
     "test": "npm run test:unit && npm run test:integration",
     "demo:scenario": "tsx scripts/demo-scenario.ts",
     "backup:verify": "tsx scripts/backup-verify.ts"
   },
   "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
     "effect": "3.20.0",
     "deepmerge-ts": "8.0.0",
     "shell-quote": "1.11.0",
@@ -42,8 +45,10 @@
     "cookie-parser": "1.4.7",
     "csv-parse": "7.0.3",
     "dotenv": "17.2.3",
+    "exceljs": "4.4.0",
     "express": "5.3.0",
     "express-rate-limit": "8.7.3",
+    "fflate": "0.8.3",
     "helmet": "8.1.0",
     "lucide-react": "0.468.0",
     "pdfkit": "0.17.2",

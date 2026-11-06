@@ -10,7 +10,7 @@ import {
   verifyPassword,
 } from "./security.js";
 import { issueSession, voterAuth, cookieOptions } from "./auth.js";
-import { castVote, windowAvailable } from "./services.js";
+import { castVote, windowAvailable, lockElection } from "./services.js";
 export const voter = Router();
 const dummyHash = await passwordHash("not-a-valid-credential");
 const authLimit = rateLimit({
@@ -19,15 +19,13 @@ const authLimit = rateLimit({
   standardHeaders: "draft-8",
   legacyHeaders: false,
   handler: (_req, res) =>
-    res
-      .status(429)
-      .json({
-        error: {
-          code: "RATE_LIMITED",
-          message: "Demasiados intentos. Espera un minuto.",
-          requestId: res.locals.requestId,
-        },
-      }),
+    res.status(429).json({
+      error: {
+        code: "RATE_LIMITED",
+        message: "Demasiados intentos. Espera un minuto.",
+        requestId: res.locals.requestId,
+      },
+    }),
 });
 voter.post("/sessions", authLimit, async (req, res) => {
   const parsed = voterLoginSchema.safeParse(req.body);
@@ -95,13 +93,54 @@ voter.post("/sessions", authLimit, async (req, res) => {
       "VOTING_WINDOW_CLOSED",
       "Tu turno aún no está abierto o se encuentra en pausa.",
     );
-  await db.credential.update({
-    where: { id: c.id },
-    data: { attempts: 0, lockedUntil: null },
-  });
-  const session = await issueSession(res, "voter", {
-    studentId: student.id,
-    electionId,
+  const session = await db.$transaction(async (tx) => {
+    const latestElection = await lockElection(tx, electionId);
+    const latest = await tx.credential.findUnique({ where: { id: c.id } });
+    if (
+      !latest ||
+      latest.codeHash !== c.codeHash ||
+      !latest.active ||
+      +latest.expiresAt < Date.now() ||
+      (latest.lockedUntil && +latest.lockedUntil > Date.now())
+    )
+      throw new AppError(
+        401,
+        "AUTH_FAILED",
+        "No pudimos verificar tus datos. Solicita ayuda a la mesa.",
+      );
+    const latestParticipation = await tx.participation.findUniqueOrThrow({
+      where: { id: p.id },
+    });
+    if (latestParticipation.state === "ANULADA_POR_COMITE")
+      throw new AppError(
+        401,
+        "AUTH_FAILED",
+        "No pudimos verificar tus datos. Solicita ayuda a la mesa.",
+      );
+    if (
+      latestParticipation.state !== "VOTO_EMITIDO" &&
+      !windowAvailable(
+        latestElection,
+        latestElection.windows.find(
+          (w) => w.shift === latestParticipation.shift,
+        ),
+      )
+    )
+      throw new AppError(
+        409,
+        "VOTING_WINDOW_CLOSED",
+        "Tu turno no está abierto.",
+      );
+    await tx.credential.update({
+      where: { id: c.id },
+      data: { attempts: 0, lockedUntil: null },
+    });
+    return issueSession(
+      res,
+      "voter",
+      { studentId: student.id, electionId },
+      tx,
+    );
   });
   res.json({
     data: {
@@ -109,9 +148,9 @@ voter.post("/sessions", authLimit, async (req, res) => {
       electionId,
       alreadyRecorded: p.state === "VOTO_EMITIDO",
       student: {
-        displayName: student.displayName,
-        grade: student.grade,
-        section: student.section,
+        displayName: p.displayName,
+        grade: p.grade,
+        section: p.section,
         shift: p.shift,
       },
     },
@@ -120,15 +159,23 @@ voter.post("/sessions", authLimit, async (req, res) => {
 voter.use(voterAuth);
 voter.get("/me", async (_req, res) => {
   const s = res.locals.voter;
+  const p = await db.participation.findUniqueOrThrow({
+    where: {
+      electionId_studentId: {
+        electionId: s.electionId,
+        studentId: s.studentId,
+      },
+    },
+  });
   res.json({
     data: {
       electionId: s.electionId,
       csrfToken: res.locals.csrfToken,
       student: {
-        displayName: s.student.displayName,
-        grade: s.student.grade,
-        section: s.student.section,
-        shift: s.student.shift,
+        displayName: p.displayName,
+        grade: p.grade,
+        section: p.section,
+        shift: p.shift,
       },
     },
   });
@@ -162,10 +209,18 @@ voter.get("/ballot", async (_req, res) => {
       lists: { where: { active: true }, orderBy: { number: "asc" } },
     },
   });
+  const participation = await db.participation.findUniqueOrThrow({
+    where: {
+      electionId_studentId: {
+        electionId: s.electionId,
+        studentId: s.studentId,
+      },
+    },
+  });
   if (
     !windowAvailable(
       e,
-      e.windows.find((w) => w.shift === s.student.shift),
+      e.windows.find((w) => w.shift === participation.shift),
     )
   )
     throw new AppError(
@@ -192,14 +247,12 @@ voter.post("/votes", async (req, res) => {
       "Falta el identificador del intento.",
     );
   const result = await castVote(res.locals.voter.id, req.body);
-  res
-    .status(result.status === "RECORDED" ? 201 : 200)
-    .json({
-      data: {
-        ...result,
-        message: "Tu participación fue registrada correctamente.",
-      },
-    });
+  res.status(result.status === "RECORDED" ? 201 : 200).json({
+    data: {
+      ...result,
+      message: "Tu participación fue registrada correctamente.",
+    },
+  });
 });
 voter.post("/logout", async (_req, res) => {
   await db.voterSession.update({

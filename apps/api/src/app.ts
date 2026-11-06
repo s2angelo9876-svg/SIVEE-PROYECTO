@@ -43,7 +43,7 @@ app.use((req, res, next) => {
 });
 app.use(cookieParser());
 app.use(originGuard);
-app.use("/api/v1/admin/elections/:id/roster", express.json({ limit: "1mb" }));
+app.use("/api/v1/admin/elections/:id/roster", express.json({ limit: "8mb" }));
 app.use(express.json({ limit: "32kb" }));
 app.get("/api/v1/health/live", (_req, res) =>
   res.json({ data: { status: "ok", service: "SIVEE" } }),
@@ -55,15 +55,13 @@ app.get("/api/v1/health/ready", async (_req, res) => {
       data: { status: "ready", database: "connected", mode: config.SIVEE_ENV },
     });
   } catch {
-    res
-      .status(503)
-      .json({
-        error: {
-          code: "DEPENDENCY_UNAVAILABLE",
-          message: "Servicio temporalmente no disponible.",
-          requestId: res.locals.requestId,
-        },
-      });
+    res.status(503).json({
+      error: {
+        code: "DEPENDENCY_UNAVAILABLE",
+        message: "Servicio temporalmente no disponible.",
+        requestId: res.locals.requestId,
+      },
+    });
   }
 });
 app.get("/api/v1/elections/active/public", async (_req, res) => {
@@ -100,15 +98,13 @@ app.use("/api/v1/voter", voter);
 admin.use(accountRoutes);
 app.use("/api/v1/admin", admin);
 app.use("/api", (_req, res) =>
-  res
-    .status(404)
-    .json({
-      error: {
-        code: "NOT_FOUND",
-        message: "Ruta no encontrada.",
-        requestId: res.locals.requestId,
-      },
-    }),
+  res.status(404).json({
+    error: {
+      code: "NOT_FOUND",
+      message: "Ruta no encontrada.",
+      requestId: res.locals.requestId,
+    },
+  }),
 );
 const frontend = path.resolve("apps/web/dist");
 if (fs.existsSync(frontend)) {

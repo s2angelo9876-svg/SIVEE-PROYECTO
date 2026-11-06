@@ -44,6 +44,7 @@ model Election {
   reports Report[]
   incidents Incident[]
   audits Audit[]
+  rosterImports RosterImport[]
   @@map("elections")
 }
 model Window {
@@ -80,9 +81,24 @@ model Participation {
   studentId String @db.Uuid
   student Student @relation(fields:[studentId],references:[id])
   shift String
+  displayName String @default("")
+  grade String @default("")
+  section String @default("")
   state String @default("PENDIENTE")
   @@unique([electionId,studentId])
   @@map("participations")
+}
+model RosterImport {
+  id String @id @db.Uuid
+  electionId String @db.Uuid
+  election Election @relation(fields:[electionId],references:[id])
+  adminId String @db.Uuid
+  source String
+  payloadHash String
+  studentIds String[] @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([electionId,createdAt])
+  @@map("roster_imports")
 }
 model ElectoralList {
   id String @id @default(uuid()) @db.Uuid

@@ -9,7 +9,7 @@ import {
   newToken,
 } from "./security.js";
 import { hasPermission } from "../../../packages/shared/domain.js";
-import { audit } from "./services.js";
+import { audit, type Tx } from "./services.js";
 export const cookieOptions = {
   httpOnly: true,
   secure: config.COOKIE_SECURE === "true",
@@ -20,6 +20,7 @@ export async function issueSession(
   res: Response,
   kind: "voter" | "admin",
   fields: { studentId: string; electionId: string } | { adminId: string },
+  tx: Tx = db,
 ) {
   const token = newToken();
   const ttl = kind === "voter" ? 300 : 1800;
@@ -28,8 +29,8 @@ export async function issueSession(
     tokenHash: hashSecret(token),
     expiresAt: new Date(Date.now() + ttl * 1000),
   };
-  if (kind === "voter") await db.voterSession.create({ data: data as any });
-  else await db.adminSession.create({ data: data as any });
+  if (kind === "voter") await tx.voterSession.create({ data: data as any });
+  else await tx.adminSession.create({ data: data as any });
   res.cookie(`sivee_${kind}`, token, { ...cookieOptions, maxAge: ttl * 1000 });
   return { csrfToken: csrfFor(token), expiresInSeconds: ttl };
 }

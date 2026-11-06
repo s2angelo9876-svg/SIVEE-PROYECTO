@@ -2,6 +2,21 @@
 
 Entrega verificada: **05/11/2026 18:46 (Lima)**. Datos ficticios, PostgreSQL 17 real. Evidencias machine-readable en `artifacts/`.
 
+## Actualización del padrón y menú · 06/11/2026
+
+Validación en Linux con Node 24, PostgreSQL 17 y Chromium:
+
+- ESLint, TypeScript y compilación aprobados; 33 pruebas unitarias y 41 comprobaciones de integración aprobadas (25 del flujo electoral y 16 nuevas del padrón).
+- Cuatro pruebas Playwright aprobadas: jornada completa, pantallas móviles, Excel/alta individual/recuperación y desplazamiento del menú. La prueba del padrón utiliza una base temporal y la API compilada en el puerto 5052.
+- Excel con varias hojas, primera hoja vacía, ceros iniciales, filas ocultas, encabezados personalizados y CSV con punto y coma. Fórmulas, fechas, archivos dañados y expansión ZIP excesiva rechazados; los errores conservan la fila original.
+- Importación atómica, reintento idempotente tras respuesta perdida, inscripción individual concurrente y conservación de datos históricos entre elecciones.
+- Reemisión revoca sesiones y códigos anteriores: comprobadas las carreras con acceso, voto y otra reemisión. No permite incorporar electores después de preparar, ni reemitir a quien ya votó o tiene turno cerrado.
+- Menú desplazable hasta mostrar por completo Cerrar sesión, con rueda y teclas Home/End; móvil de 390 × 600 sin desbordamiento horizontal. Axe sin incidencias en la pantalla del padrón comprobada.
+- `npm run dev` conserva la instalación y aplica la migración. Respaldo cifrado restaurado y conciliado después de la actualización: 8 elecciones y 8 papeletas ficticias.
+- Auditoría npm: cero vulnerabilidades reportadas con el bloqueo actualizado.
+
+Evidencias adicionales: `artifacts/roster-integration-results.json`, `artifacts/screenshots/padron-excel-individual.png`, `menu-escritorio-scroll.png` y `menu-movil-scroll.png`. No se realizó una importación de carga máxima de 5000 electores ni una ejecución local en Windows.
+
 ## Actualización de arranque con npm · 06/11/2026
 
 Verificada en Linux con Node 24 y Docker Compose:

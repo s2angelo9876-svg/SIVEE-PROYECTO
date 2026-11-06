@@ -1183,6 +1183,15 @@ button {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 20;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #a6b9a4 transparent;
+}
+.sidebar > * {
+  flex-shrink: 0;
 }
 .sidebar .brand {
   margin-left: 7px;
@@ -3252,4 +3261,84 @@ td small {
 }
 .schedule-block h3 {
   margin-bottom: 15px;
+}
+
+.roster-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 14px 0;
+}
+.roster-columns {
+  align-items: start;
+}
+.roster-columns > .panel {
+  min-width: 0;
+}
+.roster-field-grid,
+.roster-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.roster-field-grid .field,
+.roster-selectors .field {
+  margin: 0;
+  min-width: 0;
+}
+.roster-selectors > .button {
+  align-self: end;
+}
+.roster-help,
+.roster-sample {
+  margin: 16px 0;
+}
+.roster-sample summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-weight: 600;
+}
+.roster-options {
+  margin: 18px 0;
+}
+.roster-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.roster-check input {
+  flex-shrink: 0;
+  margin-top: 4px;
+  accent-color: #167568;
+}
+.roster-errors {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px 22px;
+  font-size: 13px;
+}
+.roster-errors li {
+  margin: 8px 0;
+}
+.roster-batch-id {
+  display: block;
+  color: #68746b;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.roster-sample td {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 600px) {
+  .roster-field-grid,
+  .roster-selectors {
+    grid-template-columns: 1fr;
+  }
 }

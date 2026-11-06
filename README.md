@@ -69,7 +69,7 @@ Hay 25 electores por turno: documentos `00000001`–`00000050`, códigos `DEMOCO
 ## Lo que puedes presentar
 
 - Portada y sufragio responsive: documento + código, confirmación de identidad, cédula, revisión, emisión y constancia neutra.
-- Padrón CSV con vista previa, errores, unicidad, confirmación y entrega de códigos individuales.
+- Padrón Excel/CSV y alta individual en BORRADOR, con selección de hoja/columnas, validación, historial de cargas y reemisión controlada de códigos.
 - Elecciones y listas configurables; 2–4 listas antes de preparar. Opciones blanco y nulo autorizables.
 - Ventanas mañana/tarde: apertura, pausa, reanudación y cierre definitivo.
 - Registro atómico, idempotente y concurrente de votos. La papeleta no contiene identidad ni fecha exacta de emisión.
@@ -80,6 +80,8 @@ Hay 25 electores por turno: documentos `00000001`–`00000050`, códigos `DEMOCO
 - Respaldo cifrado y ensayo de restauración aislada.
 
 Empieza por la [guía de presentación](docs/DEMO.md). Consulta [operación y recuperación](docs/RUNBOOK.md), [API](docs/API.md) y [alcance y trazabilidad](docs/IMPLEMENTACION.md).
+
+La [guía del padrón](docs/PADRON.md) explica cómo cargar Excel, incorporar a un estudiante y recuperar una entrega de códigos perdida. El menú lateral se puede desplazar de manera independiente, también en móvil.
 
 ## Validación
 
@@ -96,7 +98,7 @@ npm run backup:verify
 npx tsx scripts/production-smoke.ts
 ```
 
-Las pruebas de integración crean y eliminan una base `sivee_test_*`, usando credenciales de migración. No operan sobre el padrón de la demo. Las E2E recorren la demo, archivan su elección de prueba y dejan una nueva simulación abierta. Por defecto usan Chromium instalado por Playwright; `CHROMIUM_PATH` permite indicar otro ejecutable.
+Las pruebas de integración crean y eliminan bases `sivee_test_*`, usando credenciales de migración. No operan sobre el padrón de la demo. Las E2E de presentación recorren la demo, archivan su elección de prueba y dejan una nueva simulación abierta. Las E2E del padrón usan otra base temporal y el servidor compilado en el puerto 5052; ejecuta `npm run build` antes de ellas. Por defecto usan Chromium instalado por Playwright; `CHROMIUM_PATH` permite indicar otro ejecutable.
 
 `npm run demo:scenario` ensaya 50 votos completos vía API: 38 válidos, 7 blancos y 5 nulos; archiva la simulación anterior. Úsalo solo con el padrón ficticio original. Espera un minuto entre ejecuciones para respetar los límites de autenticación.
 

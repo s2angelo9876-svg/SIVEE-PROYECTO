@@ -7,7 +7,8 @@ import {
   hasPermission,
   rosterRowSchema,
 } from "../packages/shared/domain";
-import { parseRoster, windowAvailable } from "../apps/api/src/services";
+import { windowAvailable } from "../apps/api/src/services";
+import { parseRoster } from "../apps/api/src/roster-files";
 import { canonical, digest } from "../apps/api/src/security";
 const electionId = "11111111-1111-4111-8111-111111111111";
 const listId = "22222222-2222-4222-8222-222222222222";
@@ -83,7 +84,7 @@ describe("padrón y ventanas", () => {
       "dni,apellidos_nombres,grado,seccion,turno,habilitado\n00000001,Ana Demo,3,A,MANANA,true\n00000001,Ana Demo,3,A,MANANA,true",
     );
     expect(r.errors).toEqual([
-      { row: 3, message: "Documento duplicado en el archivo." },
+      { row: 3, field: "dni", message: "Documento duplicado en el archivo." },
     ]);
   });
   it("valida turno, grado y elegibilidad", () =>
