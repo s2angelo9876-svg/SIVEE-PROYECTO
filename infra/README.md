@@ -12,12 +12,12 @@ docker compose --env-file .env -f infra/compose.demo.yaml -f infra/compose.app.y
 
 El origen del ejemplo es `http://localhost:8080`. Para una LAN real o nube, configura dominio/HTTPS, `WEB_ORIGIN` exacto y cookies seguras. `nginx/sivee.conf.example` es una plantilla; los certificados y la red institucional no están provisionados por el proyecto.
 
-En el entorno cloud, toda compilación que acceda a red conserva proxy y CA. Para compilar con la CA de sesión:
+Railway usa `infra/Dockerfile` desde la raíz del repositorio, según `railway.json`. La instalación ejecuta `npm ci --strict-ssl=true` sin montajes de secretos: el validador de Railway rechaza `--mount=type=secret` antes de iniciar el build.
 
 ```bash
-docker --host=unix:///var/run/docker.sock build --secret id=proxy_ca,src="$CODEX_PROXY_CERT" -f infra/Dockerfile -t sivee:demo .
+docker build -f infra/Dockerfile -t sivee:demo .
 ```
 
-La CA se monta solo en los pasos de instalación; no se incluye en la imagen. No desactives TLS ni verificación de checksums. Docker Compose requiere añadir el secreto de build equivalente si se usa ese flujo dentro de la nube.
+Para compilaciones en redes corporativas o entornos cloud con inspección TLS, configura la confianza de la CA en ese entorno de compilación. El Dockerfile de Railway no contiene configuración del proxy de Codex. No desactives TLS ni la verificación de checksums.
 
 La base se publica solo en loopback y utiliza volumen nombrado. La prueba de backup utiliza el contenedor de base y restaura exclusivamente en una base temporal. No hay servicios externos, túneles públicos ni despliegues remotos creados automáticamente.

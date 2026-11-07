@@ -2,9 +2,7 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN --mount=type=secret,id=proxy_ca \
-    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm ci --strict-ssl=true
+RUN npm ci --strict-ssl=true
 COPY . .
 # Generation uses the official JS adapter; this placeholder never connects to a database.
 RUN DATABASE_URL=postgresql://unused@localhost/sivee_demo npm run db:generate
