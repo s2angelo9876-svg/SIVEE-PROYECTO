@@ -31,6 +31,12 @@ La configuración de este repositorio publica React y Express en **un mismo serv
 
 Para posteriores versiones, respalda y prueba primero en un entorno separado. Ejecuta **solo** `node dist/ops/migrate.js` en el servicio temporal de operaciones, usando una configuración con ese comando de inicio; después despliega la API. No reutilices `/infra/railway.init.json` sin ajustar su comando, pues también intenta inicializar la institución. No vuelvas a ejecutar el inicializador. Las migraciones tienen checksum: no modifiques SQL ya aplicado. Los secretos de búsqueda/cifrado deben permanecer estables al actualizar.
 
+## Si Railway usa Railpack
+
+`npm run build` genera explícitamente Prisma antes de comprobar TypeScript y compilar. Esto también permite compilar cuando Railpack instaló dependencias antes de copiar `prisma.config.ts`. No dependas del postinstall de `@prisma/client` para encontrar el esquema en `apps/api/prisma`.
+
+Si los registros de operaciones muestran Railpack y `npm run start`, ese servicio está usando el arranque de la API. Selecciona `/infra/railway.init.json` como archivo de configuración en Settings → Config-as-code y despliega nuevamente. Como alternativa, configura en ese servicio el comando de inicio `node dist/ops/migrate.js && node dist/ops/bootstrap-production.js`, sin healthcheck HTTP y con reinicios desactivados. En el servicio SIVEE el arranque sigue siendo `npm start` o `node dist/api/main.js`.
+
 ## Preparar el padrón real
 
 El Excel recibido contiene 1742 estudiantes, sin columna de turno. Detectamos 20 documentos vacíos, 5 de longitud diferente de ocho y 2 matrículas EN PROCESO, en filas distintas de los 25 problemas documentales. Estos casos requieren decisión del colegio. No completes documentos ni asignes turnos por suposición.

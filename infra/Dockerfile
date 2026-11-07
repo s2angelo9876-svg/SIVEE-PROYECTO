@@ -5,8 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --strict-ssl=true
 COPY . .
 # Generation uses the official JS adapter; this placeholder never connects to a database.
-RUN DATABASE_URL=postgresql://unused@localhost/sivee_demo npm run db:generate
-RUN npm run build
+RUN DATABASE_URL=postgresql://unused@localhost/sivee_demo npm run build
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=5000

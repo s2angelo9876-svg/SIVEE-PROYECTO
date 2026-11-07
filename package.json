@@ -11,7 +11,7 @@
     "dev:services": "concurrently -k -n API,WEB \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "tsx watch apps/api/src/main.ts",
     "dev:web": "vite --config apps/web/vite.config.ts --host 0.0.0.0",
-    "build": "npm run typecheck && vite build --config apps/web/vite.config.ts && node scripts/build-api.mjs",
+    "build": "npm run db:generate && npm run typecheck && vite build --config apps/web/vite.config.ts && node scripts/build-api.mjs",
     "start": "node dist/api/main.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
