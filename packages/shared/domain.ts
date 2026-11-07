@@ -42,6 +42,7 @@ export const electionSchema = z
       .min(1)
       .max(2)
       .refine((x) => new Set(x).size === x.length),
+    authMode: z.enum(["CODE", "DESK"]).optional(),
   })
   .strict();
 export const listSchema = z
@@ -70,13 +71,15 @@ export const rosterRowSchema = z
     dni: z.string().regex(/^\d{8}$/),
     apellidos_nombres: z.string().trim().min(3).max(150),
     grado: z.string().regex(/^[1-6]$/),
-    seccion: z.string().regex(/^[A-Z]{1,2}$/),
+    seccion: z.string().trim().min(1).max(100),
     turno: shiftSchema,
     habilitado: z.enum(["true", "false"]),
   })
   .strict();
 export const rolePermissions: Record<string, string[]> = {
   COMITE: [
+    "desk:manage",
+    "desk:verify",
     "elections:read",
     "elections:write",
     "elections:prepare",
@@ -110,7 +113,13 @@ export const rolePermissions: Record<string, string[]> = {
     "incidents:write",
   ],
   OBSERVADOR: ["elections:read", "turnout:read", "results:read"],
-  MESA: ["elections:read", "turnout:read", "incidents:read", "incidents:write"],
+  MESA: [
+    "elections:read",
+    "turnout:read",
+    "incidents:read",
+    "incidents:write",
+    "desk:verify",
+  ],
   ADMIN_TECNICO: ["accounts:manage"],
 };
 export function hasPermission(

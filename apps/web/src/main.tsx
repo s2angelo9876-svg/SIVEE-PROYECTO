@@ -14,8 +14,12 @@ import {
   Incidents,
   Security,
   Accounts,
+  ActivateAccount,
 } from "./Admin";
 import { Roster } from "./Roster";
+import { Desk } from "./Desk";
+import { BoothPairing } from "./Booth";
+import { SiteProvider } from "./Site";
 import "./styles.css";
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -42,33 +46,38 @@ class ErrorBoundary extends React.Component<
 }
 createRoot(document.getElementById("root")!).render(
   <ErrorBoundary>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/votar" element={<VoterFlow />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin" element={<AdminShell />}>
-          <Route index element={<Dashboard />} />
-          <Route path="jornada" element={<ElectionDay />} />
-          <Route path="padron" element={<Roster />} />
-          <Route path="listas" element={<Lists />} />
-          <Route path="resultados" element={<Results />} />
-          <Route path="configuracion" element={<Settings />} />
-          <Route path="auditoria" element={<AuditPage />} />
-          <Route path="incidencias" element={<Incidents />} />
-          <Route path="seguridad" element={<Security />} />
-          <Route path="cuentas" element={<Accounts />} />
-        </Route>
-        <Route
-          path="*"
-          element={
-            <main className="error-page">
-              <h1>Página no encontrada</h1>
-              <Link to="/">Volver al inicio</Link>
-            </main>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
+    <SiteProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/votar" element={<VoterFlow />} />
+          <Route path="/cabina/activar" element={<BoothPairing />} />
+          <Route path="/activar-cuenta" element={<ActivateAccount />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin" element={<AdminShell />}>
+            <Route index element={<Dashboard />} />
+            <Route path="jornada" element={<ElectionDay />} />
+            <Route path="padron" element={<Roster />} />
+            <Route path="mesa" element={<Desk />} />
+            <Route path="listas" element={<Lists />} />
+            <Route path="resultados" element={<Results />} />
+            <Route path="configuracion" element={<Settings />} />
+            <Route path="auditoria" element={<AuditPage />} />
+            <Route path="incidencias" element={<Incidents />} />
+            <Route path="seguridad" element={<Security />} />
+            <Route path="cuentas" element={<Accounts />} />
+          </Route>
+          <Route
+            path="*"
+            element={
+              <main className="error-page">
+                <h1>Página no encontrada</h1>
+                <Link to="/">Volver al inicio</Link>
+              </main>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
+    </SiteProvider>
   </ErrorBoundary>,
 );

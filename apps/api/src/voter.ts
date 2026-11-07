@@ -40,6 +40,12 @@ voter.post("/sessions", authLimit, async (req, res) => {
     where: { id: electionId },
     include: { windows: true },
   });
+  if (e && (e.authMode === "DESK" || e.mode === "OFICIAL"))
+    throw new AppError(
+      403,
+      "DESK_REQUIRED",
+      "Utiliza una cabina autorizada y solicita la verificación de la mesa.",
+    );
   const student = e
     ? await db.student.findUnique({
         where: {
@@ -246,7 +252,11 @@ voter.post("/votes", async (req, res) => {
       "INVALID_PAYLOAD",
       "Falta el identificador del intento.",
     );
-  const result = await castVote(res.locals.voter.id, req.body);
+  const result = await castVote(
+    res.locals.voter.id,
+    req.body,
+    req.cookies.sivee_booth,
+  );
   res.status(result.status === "RECORDED" ? 201 : 200).json({
     data: {
       ...result,
@@ -255,9 +265,23 @@ voter.post("/votes", async (req, res) => {
   });
 });
 voter.post("/logout", async (_req, res) => {
-  await db.voterSession.update({
-    where: { id: res.locals.voter.id },
-    data: { revoked: true },
+  const session = res.locals.voter;
+  await db.$transaction(async (tx) => {
+    await lockElection(tx, session.electionId, true);
+    await tx.voterSession.update({
+      where: { id: session.id },
+      data: { revoked: true },
+    });
+    if (session.admissionId) {
+      await tx.admission.updateMany({
+        where: { id: session.admissionId, state: "APPROVED" },
+        data: { state: "CANCELLED" },
+      });
+      await tx.voterSession.updateMany({
+        where: { admissionId: session.admissionId },
+        data: { revoked: true },
+      });
+    }
   });
   res.clearCookie("sivee_voter", cookieOptions);
   res.json({ data: { ok: true } });

@@ -47,7 +47,7 @@ export const rosterInputSchema = z
   );
 export type RosterInput = z.infer<typeof rosterInputSchema>;
 type Cell = { text: string; invalid?: string };
-type Table = {
+export type Table = {
   sheet: string;
   sheets: { name: string; hidden: boolean }[];
   lines: { row: number; cells: Cell[] }[];
@@ -76,7 +76,10 @@ const alias: Record<RosterField, string[]> = {
 const fileError = (message: string) =>
   new AppError(400, "INVALID_ROSTER_FILE", message);
 
-async function excelTable(input: RosterInput): Promise<Table> {
+async function excelTable(
+  input: RosterInput,
+  schoolReport = false,
+): Promise<Table> {
   const file = input.file!;
   if (!/\.xlsx$/i.test(file.name))
     throw fileError(
@@ -157,7 +160,11 @@ async function excelTable(input: RosterInput): Promise<Table> {
       for (let i = 1; i <= sheet.columnCount; i++) {
         const cell = row.getCell(i);
         let invalid: string | undefined;
-        if (cell.isMerged) invalid = "Separa las celdas combinadas.";
+        if (
+          cell.isMerged &&
+          (!schoolReport || Number(cell.master.row) !== row.number)
+        )
+          invalid = "Separa las celdas combinadas entre filas.";
         else if (cell.type === ExcelJS.ValueType.Formula)
           invalid = "Reemplaza la fórmula por su valor antes de importar.";
         else if (
@@ -167,7 +174,14 @@ async function excelTable(input: RosterInput): Promise<Table> {
           invalid =
             "La celda debe contener texto o un número válido, no una fecha o error.";
         // Never pad numeric DNI: if Excel removed zeros, the operator must correct it.
-        cells.push({ text: cell.text.trim(), ...(invalid ? { invalid } : {}) });
+        const text =
+          cell.value === null ||
+          (schoolReport &&
+            cell.isMerged &&
+            cell.master.address !== cell.address)
+            ? ""
+            : cell.text.trim();
+        cells.push({ text, ...(invalid ? { invalid } : {}) });
       }
       lines.push({ row: number, cells });
     });
@@ -190,6 +204,14 @@ async function excelTable(input: RosterInput): Promise<Table> {
       "No se pudo leer el Excel. Comprueba que no esté dañado o protegido con contraseña.",
     );
   }
+}
+
+export async function readSchoolTable(source: {
+  file?: { name: string; base64: string };
+  csv?: string;
+}) {
+  const input = rosterInputSchema.parse(source);
+  return input.file ? excelTable(input, true) : csvTable(input.csv!);
 }
 
 function csvTable(csv: string, headerRow = 1): Table {

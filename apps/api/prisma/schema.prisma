@@ -16,6 +16,12 @@ model Institution {
   admins Admin[]
   @@map("institutions")
 }
+model InstitutionBranding {
+  institutionId String @id @db.Uuid
+  mime String
+  image Bytes
+  @@map("institution_branding")
+}
 model Election {
   id String @id @default(uuid()) @db.Uuid
   institutionId String @db.Uuid
@@ -24,6 +30,7 @@ model Election {
   year Int @default(2026)
   scope String @default("Municipio escolar · Secundaria")
   mode String @default("DEMO")
+  authMode String @default("CODE")
   state String @default("BORRADOR")
   blankAllowed Boolean @default(true)
   nullAllowed Boolean @default(true)
@@ -150,6 +157,7 @@ model VoterSession {
   expiresAt DateTime
   consumed Boolean @default(false)
   revoked Boolean @default(false)
+  admissionId String? @db.Uuid
   @@map("voter_sessions")
 }
 model Admin {
@@ -184,7 +192,66 @@ model AdminSession {
   tokenHash String @unique
   expiresAt DateTime
   revoked Boolean @default(false)
+  purpose String @default("FULL")
   @@map("admin_sessions")
+}
+
+model SchoolImport {
+  id String @id @db.Uuid
+  electionId String @db.Uuid
+  adminId String @db.Uuid
+  source String
+  payloadHash String
+  total Int
+  createdAt DateTime @default(now())
+  @@index([electionId, createdAt])
+  @@map("school_imports")
+}
+model SchoolDraft {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  batchId String @db.Uuid
+  studentCode String
+  sourceRow Int
+  documentEncrypted String
+  displayName String
+  grade String
+  section String
+  shift String?
+  enrollment String
+  enrollmentApproved Boolean @default(false)
+  excluded Boolean @default(false)
+  reason String @default("")
+  version Int @default(1)
+  publishedAt DateTime?
+  @@unique([electionId, studentCode])
+  @@index([electionId, publishedAt])
+  @@map("school_drafts")
+}
+model Booth {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  name String
+  assignedAdminId String @db.Uuid
+  active Boolean @default(true)
+  tokenHash String? @unique
+  pairingHash String?
+  pairingExpiresAt DateTime?
+  @@unique([electionId, name])
+  @@map("booths")
+}
+model Admission {
+  id String @id @default(uuid()) @db.Uuid
+  electionId String @db.Uuid
+  boothId String @db.Uuid
+  studentId String @db.Uuid
+  state String @default("WAITING")
+  expiresAt DateTime
+  approvedBy String? @db.Uuid
+  createdAt DateTime @default(now())
+  @@index([boothId, createdAt])
+  @@index([electionId, studentId])
+  @@map("admissions")
 }
 model Audit {
   id String @id @default(uuid()) @db.Uuid

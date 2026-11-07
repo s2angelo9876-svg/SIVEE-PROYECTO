@@ -1,5 +1,7 @@
 # Operación y recuperación
 
+Para elecciones presenciales oficiales, usa [Producción: Railway, padrón y mesa](PRODUCCION.md). Los comandos DEMO de este documento se conservan para el entorno de ensayo.
+
 ## Inicio habitual
 
 Desde la raíz: `npm install` (primera vez), luego `npm run dev` con Docker iniciado. Prepara PostgreSQL automáticamente antes de arrancar API y web, respetando el contexto de Docker. Validar `/api/v1/health/ready`: `status=ready`, `database=connected`. Para una base ya preparada usa `npm run dev:services`. Diagnóstico de Docker Desktop en Windows: [README](../README.md#si-docker-no-conecta-en-windows).
@@ -37,7 +39,7 @@ Nunca restaures sobre la elección activa como primer recurso. Restaura en una b
 - Padrón incorrecto tras preparar: sigue el procedimiento institucional. No uses SQL informal para habilitar electores.
 - Credencial comprometida: el administrador técnico desactiva la cuenta y revoca sus sesiones. No publiques tokens en la incidencia.
 
-## Despliegue oficial pendiente
+## Requisitos del despliegue oficial
 
 Usar base separada, cuentas sin fixtures, MFA, secretos seguros, HTTPS y cookies Secure, reglas institucionales documentadas, backups fuera del servidor y ensayo de recuperación/red eléctrica. En el modo oficial se exige `INSTITUTIONAL_APPROVAL_REFERENCE` al preparar; esa variable registra una referencia y no certifica una autorización. La separación de servidores, la custodia de esa referencia y los roles deben validarse fuera de la aplicación.
 

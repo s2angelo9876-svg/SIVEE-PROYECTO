@@ -9,7 +9,15 @@ import {
   Star,
   ArrowUpRight,
 } from "lucide-react";
-export const tokens = { admin: "", voter: "" };
+export const tokens = { admin: "", voter: "", booth: "" };
+export function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(new Error("No se pudo abrir el archivo."));
+    reader.readAsDataURL(file);
+  });
+}
 export class ApiError extends Error {
   constructor(
     public code: string,
@@ -24,7 +32,7 @@ export async function api<T = any>(
   options: {
     method?: string;
     body?: unknown;
-    kind?: "admin" | "voter";
+    kind?: "admin" | "voter" | "booth";
     headers?: Record<string, string>;
   } = {},
 ): Promise<T> {
@@ -49,14 +57,12 @@ export async function api<T = any>(
       0,
     );
   }
-  const result = await response
-    .json()
-    .catch(() => ({
-      error: {
-        code: "UNAVAILABLE",
-        message: "El servidor no está disponible. Inténtalo de nuevo.",
-      },
-    }));
+  const result = await response.json().catch(() => ({
+    error: {
+      code: "UNAVAILABLE",
+      message: "El servidor no está disponible. Inténtalo de nuevo.",
+    },
+  }));
   if (!response.ok)
     throw new ApiError(
       result.error?.code || "ERROR",

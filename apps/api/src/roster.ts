@@ -111,6 +111,10 @@ export async function previewRoster(electionId: string, input: RosterInput) {
     include: { windows: true },
   });
   requireState(election.state === "BORRADOR");
+  requireState(
+    election.authMode === "CODE",
+    "Utiliza el padrón escolar con revisión y sin códigos individuales.",
+  );
   const parsed = await parseRosterInput(input);
   const checked = await checkRoster(db, election, parsed.rows, input);
   const errors = [...parsed.errors, ...checked.errors].sort(
@@ -223,6 +227,10 @@ export async function importRoster(
   });
   requireState(election.state === "BORRADOR");
   const preflight = await checkRoster(db, election, parsed.rows, input);
+  requireState(
+    election.authMode === "CODE",
+    "Utiliza el padrón escolar con revisión y sin códigos individuales.",
+  );
   if (preflight.errors.length)
     throw new AppError(409, "INVALID_ROSTER", preflight.errors[0].message);
   if (!preflight.accepted.length)
@@ -374,6 +382,10 @@ export async function reissueCodes(
     include: { windows: true },
   });
   const allowed = (e: typeof election, rows: typeof initial) => {
+    requireState(
+      e.authMode === "CODE",
+      "Esta elección utiliza autorización presencial de mesa.",
+    );
     requireState(
       ["BORRADOR", "PREPARADA", "EN_CURSO", "PAUSADA"].includes(e.state),
       "La elección ya no admite reemisión de códigos.",

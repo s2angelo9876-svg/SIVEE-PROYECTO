@@ -1,3 +1,5 @@
+> Para las nuevas elecciones con DNI y mesa, consulta [el padrón escolar oficial](PRODUCCION.md#preparar-el-padrón-real). Este documento describe también las simulaciones anteriores con códigos.
+
 # Excel, registro individual y códigos de acceso
 
 ## Actualizar una instalación

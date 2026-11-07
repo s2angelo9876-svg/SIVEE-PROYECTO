@@ -11,10 +11,12 @@ import { voter } from "./voter.js";
 import { admin } from "./admin.js";
 import { accountRoutes } from "./mfa.js";
 import { config } from "./config.js";
+import { boothApi } from "./desk.js";
 import { originGuard } from "./auth.js";
 import { AppError } from "./security.js";
 export const app = express();
 app.disable("x-powered-by");
+app.set("trust proxy", config.TRUST_PROXY_HOPS || false);
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -44,10 +46,39 @@ app.use((req, res, next) => {
 app.use(cookieParser());
 app.use(originGuard);
 app.use("/api/v1/admin/elections/:id/roster", express.json({ limit: "8mb" }));
+app.use("/api/v1/admin/institution/crest", express.json({ limit: "1mb" }));
 app.use(express.json({ limit: "32kb" }));
 app.get("/api/v1/health/live", (_req, res) =>
   res.json({ data: { status: "ok", service: "SIVEE" } }),
 );
+app.get("/api/v1/site", async (_req, res) => {
+  const institution = await db.institution.findFirst({
+    select: { id: true, name: true },
+  });
+  const crest =
+    institution &&
+    (await db.institutionBranding.findUnique({
+      where: { institutionId: institution.id },
+      select: { mime: true },
+    }));
+  res.json({
+    data: {
+      mode: config.SIVEE_ENV === "production" ? "OFICIAL" : "DEMO",
+      institution: institution?.name || "Comunidad educativa",
+      crestUrl: crest ? "/api/v1/branding/crest" : null,
+    },
+  });
+});
+app.get("/api/v1/branding/crest", async (_req, res) => {
+  const institution = await db.institution.findFirst({ select: { id: true } });
+  const crest =
+    institution &&
+    (await db.institutionBranding.findUnique({
+      where: { institutionId: institution.id },
+    }));
+  if (!crest) throw new AppError(404, "NOT_FOUND", "Escudo no configurado.");
+  res.type(crest.mime).send(Buffer.from(crest.image));
+});
 app.get("/api/v1/health/ready", async (_req, res) => {
   try {
     await db.$queryRaw`SELECT 1`;
@@ -82,6 +113,7 @@ app.get("/api/v1/elections/active/public", async (_req, res) => {
           scope: e.scope,
           state: e.state,
           mode: e.mode,
+          authMode: e.authMode,
           institution: e.institution.name,
           contact: e.contact,
           windows: e.windows.map((w) => ({
@@ -95,6 +127,7 @@ app.get("/api/v1/elections/active/public", async (_req, res) => {
   });
 });
 app.use("/api/v1/voter", voter);
+app.use("/api/v1/booth", boothApi);
 admin.use(accountRoutes);
 app.use("/api/v1/admin", admin);
 app.use("/api", (_req, res) =>

@@ -7,6 +7,7 @@ const schema = z.object({
   SESSION_PEPPER: z.string().min(32),
   CSRF_KEY: z.string().min(32),
   PORT: z.coerce.number().default(5000),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(0),
   WEB_ORIGIN: z.url().default("http://localhost:5173"),
   COOKIE_SECURE: z.enum(["true", "false"]).default("false"),
   ALLOW_DEMO_RESET: z.enum(["true", "false"]).default("false"),
@@ -22,7 +23,8 @@ if (
   );
 if (
   config.SIVEE_ENV === "production" &&
-  (config.COOKIE_SECURE !== "true" ||
+  (new URL(config.DATABASE_URL).username !== "sivee_app" ||
+    config.COOKIE_SECURE !== "true" ||
     !config.WEB_ORIGIN.startsWith("https:") ||
     config.ALLOW_DEMO_RESET === "true" ||
     /demo|test/.test(database))

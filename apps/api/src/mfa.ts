@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { Router } from "express";
+import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
 import { config } from "./config.js";
 import { db } from "./db.js";
@@ -56,6 +57,14 @@ export function verifyTotp(encrypted: string, code: string) {
   );
 }
 export const accountRoutes = Router();
+accountRoutes.use(
+  ["/mfa/setup", "/mfa/confirm"],
+  rateLimit({
+    windowMs: 60000,
+    limit: 10,
+    keyGenerator: (_req, res) => res.locals.admin.id,
+  }),
+);
 accountRoutes.post("/mfa/setup", async (req, res) => {
   const { password } = z
     .object({ password: z.string().max(200) })
@@ -69,10 +78,21 @@ accountRoutes.post("/mfa/setup", async (req, res) => {
       "No se puede iniciar la configuración.",
     );
   const secret = encode(crypto.randomBytes(20));
-  await db.admin.update({
-    where: { id: u.id },
+  const updated = await db.admin.updateMany({
+    where: {
+      id: u.id,
+      active: true,
+      mfaEnabled: false,
+      passwordHash: u.passwordHash,
+    },
     data: { mfaSecret: encrypt(secret) },
   });
+  if (!updated.count)
+    throw new AppError(
+      409,
+      "MFA_CHANGED",
+      "Reinicia la activación del segundo factor.",
+    );
   res.json({
     data: {
       secret,
@@ -90,8 +110,23 @@ accountRoutes.post("/mfa/confirm", async (req, res) => {
   });
   if (!u.mfaSecret || !verifyTotp(u.mfaSecret, code))
     throw new AppError(400, "MFA_INVALID", "Código no válido.");
-  await db.admin.update({ where: { id: u.id }, data: { mfaEnabled: true } });
-  await audit(db, u.id, null, "MFA_ENABLED");
+  await db.$transaction(async (tx) => {
+    const enabled = await tx.admin.updateMany({
+      where: { id: u.id, mfaSecret: u.mfaSecret, active: true },
+      data: { mfaEnabled: true },
+    });
+    if (!enabled.count)
+      throw new AppError(
+        409,
+        "MFA_CHANGED",
+        "Reinicia la activación del segundo factor.",
+      );
+    await tx.adminSession.update({
+      where: { id: res.locals.adminSession.id },
+      data: { purpose: "FULL" },
+    });
+    await audit(tx, u.id, null, "MFA_ENABLED");
+  });
   res.json({ data: { ok: true } });
 });
 accountRoutes.get("/accounts", permit("accounts:manage"), async (_req, res) =>

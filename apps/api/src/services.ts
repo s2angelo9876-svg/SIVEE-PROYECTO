@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db.js";
 import { AppError, requireState, digest } from "./security.js";
+import { assertAdmission } from "./desk-security.js";
 import {
   voteSchema,
   assertReconciled,
@@ -92,7 +93,11 @@ export async function tally(tx: Tx, id: string) {
     outcome: electoralOutcome(lists),
   };
 }
-export async function castVote(sessionId: string, raw: unknown) {
+export async function castVote(
+  sessionId: string,
+  raw: unknown,
+  boothToken?: string,
+) {
   const input = voteSchema.parse(raw);
   return db.$transaction(
     async (tx) => {
@@ -119,7 +124,7 @@ export async function castVote(sessionId: string, raw: unknown) {
         throw new AppError(
           401,
           "UNAUTHENTICATED",
-          "La sesión ha vencido. Identifícate con tu código vigente.",
+          "La sesión ha vencido. Vuelve a identificarte y solicita ayuda a la mesa.",
         );
       const p = await tx.participation.findUnique({
         where: {
@@ -130,6 +135,8 @@ export async function castVote(sessionId: string, raw: unknown) {
         },
         include: { student: true },
       });
+      if (e.authMode === "DESK")
+        await assertAdmission(tx, currentSession, boothToken);
       if (!p || !p.student.active || p.state === "ANULADA_POR_COMITE")
         throw new AppError(
           403,
@@ -181,6 +188,11 @@ export async function castVote(sessionId: string, raw: unknown) {
         where: { studentId: p.studentId, electionId: e.id },
         data: { consumed: true },
       });
+      if (currentSession.admissionId)
+        await tx.admission.update({
+          where: { id: currentSession.admissionId },
+          data: { state: "CONSUMED" },
+        });
       return { status: "RECORDED" };
     },
     { timeout: 20000 },

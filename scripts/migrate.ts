@@ -4,6 +4,17 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 const url = process.env.MIGRATION_DATABASE_URL;
 if (!url) throw new Error("MIGRATION_DATABASE_URL es necesaria para migrar.");
+const migrationTarget = new URL(url),
+  appTarget = new URL(process.env.DATABASE_URL!);
+if (
+  migrationTarget.host !== appTarget.host ||
+  migrationTarget.pathname !== appTarget.pathname ||
+  appTarget.username !== "sivee_app" ||
+  !appTarget.password
+)
+  throw new Error(
+    "Ambas conexiones deben apuntar a la misma base y host; DATABASE_URL requiere el rol sivee_app y contraseña.",
+  );
 const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
@@ -57,7 +68,7 @@ try {
     "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO sivee_app",
   );
   await client.query(
-    "REVOKE UPDATE, DELETE, TRUNCATE ON ballots, audit, reports, roster_imports FROM sivee_app",
+    "REVOKE UPDATE, DELETE, TRUNCATE ON ballots, audit, reports, roster_imports, school_imports FROM sivee_app",
   );
   await client.query(
     'GRANT UPDATE (state, "approvedBy") ON reports TO sivee_app',

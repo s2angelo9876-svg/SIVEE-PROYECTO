@@ -82,6 +82,7 @@ try {
     "POST",
     {
       name: "Validación del padrón 2027",
+      authMode: "CODE",
       year: 2027,
       scope: "Municipio escolar",
       blankAllowed: true,

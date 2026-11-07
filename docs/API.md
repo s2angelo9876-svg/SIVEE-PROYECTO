@@ -53,3 +53,20 @@ El cliente envía un UUID `requestId` estable al confirmar. Un reintento con la 
 La vista previa devuelve `total`, `valid`, `invalid`, `newCount`, `skipped`, errores por fila/campo, cambios institucionales, avisos y vigencia prevista. Cuenta filas únicas con error, no cantidad de mensajes. Muestra como máximo 100 filas; valida el lote completo. Una confirmación con cualquier error no guarda filas.
 
 Reemisión: por lote únicamente en BORRADOR; individual también en PREPARADA/EN_CURSO/PAUSADA, para electores pendientes habilitados con turno no cerrado. Toma bloqueo exclusivo de elección, vuelve a comprobar condiciones, reemplaza hashes y revoca sesiones en una transacción. Los accesos y votos vuelven a comprobar la credencial/sesión tras adquirir su bloqueo para evitar carreras con la reemisión. Los motivos se auditan sin incluir códigos ni papeletas.
+
+## Modalidad presencial (`authMode: DESK`)
+
+Las nuevas elecciones usan DESK; producción exige esta modalidad. CODE se conserva solo para simulaciones anteriores. `POST /voter/sessions` no autentica elecciones DESK u oficiales. El usuario no recibe códigos individuales.
+
+- `GET /site`: modalidad, nombre institucional y URL del escudo. `GET /branding/crest`: PNG/JPEG. `POST /admin/institution/crest`: `{base64}`, requiere `elections:write`, límite 600 KB / 2048×2048.
+- `/admin/elections/:id/roster/school` exige `roster:write` y alcance institucional. `GET /` devuelve registros con documentos enmascarados, totales y últimas 50 cargas; `GET /rows/:rowId` permite al operador revisar el documento completo; `GET /template.xlsx` genera una plantilla.
+- `POST .../school/preview|import`: `{requestId:UUID, file:{name,base64}}`, `{requestId,csv}` o `{requestId,individual:{studentCode,document,displayName,grade,section,shift,enrollment}}`. Una sola fuente. La importación crea un borrador cifrado e idempotente, todavía sin electores habilitados.
+- `PATCH .../school/rows/:rowId`: campos de registro, `version`, `enrollmentApproved`, `excluded`, `reason` (10–300 caracteres). Rechaza versiones antiguas y registros ya confirmados.
+- `POST .../school/assign-shift`: `{groups:[{grade,section}],shift,reason}`. `POST .../school/publish`: `{reason,updateProfiles?}`. Se bloquea mientras existan documentos, duplicados, matrícula o turno pendientes. Solo en BORRADOR.
+- `GET /admin/elections/:id/desk`: cabinas y verificaciones pendientes de la mesa; el comité ve todas. `POST .../desk/booths`: `{name,assignedAdminId}`. `POST .../booths/:boothId/pairing`: `{reason}`, devuelve enlace privado de un uso y 10 minutos. `PATCH .../booths/:boothId`: `{active,assignedAdminId,reason}`, revoca navegador y autorizaciones. Gestión requiere `desk:manage`.
+- `POST .../desk/requests/:requestId/approve`: `{identityVerified:true,document,reason}`; el DNI cotejado debe coincidir. `POST .../cancel`: `{identityVerified:false,reason}`. Exigen `desk:verify` y cabina asignada o permiso de gestión.
+- `POST /booth/pair`: `{id,token}` del fragmento del enlace; instala cookie HttpOnly `sivee_booth`. `GET /booth/status` exige esa cookie y devuelve CSRF y estado, sin identidad. `POST /booth/requests`: `{dni}`; `POST /booth/claim|cancel`: `{requestId}`. Estas mutaciones requieren CSRF de cabina y origen exacto.
+- La sesión emitida por `claim` se usa en `/voter/me|ballot|votes|status|logout` con **ambas cookies** y CSRF del votante. Vence como máximo al vencer la autorización, cinco minutos desde la aprobación. La actividad no renueva esa autorización. `logout` cancela autorizaciones no consumidas. `votes` mantiene la transacción y la unicidad de participación.
+- En producción, el primer login sin MFA devuelve `mfaSetupRequired:true` y una sesión `MFA_SETUP`: solo permite `/me`, `/mfa/setup`, `/mfa/confirm`, `/auth/logout`. Confirmar TOTP habilita el resto del panel; los siguientes logins requieren OTP.
+
+No se registran documentos, secretos de activación ni preferencias en auditoría. Las papeletas no incluyen estudiante, autorización ni cabina. Las políticas de red privada, supervisión de equipos y verificación presencial se detallan en [Producción](PRODUCCION.md).

@@ -47,14 +47,17 @@ import {
   dateFormat,
   shiftLabel,
   downloadText,
+  readBase64,
 } from "./lib";
 import { Brand } from "./Public";
+import { useSite } from "./Site";
 import { hasPermission } from "../../../packages/shared/domain";
 const AdminContext = createContext<any>(null);
 export function useAdmin() {
   return useContext(AdminContext);
 }
 export function AdminLogin() {
+  const site = useSite();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -110,7 +113,9 @@ export function AdminLogin() {
                   body: { email, password, ...(mfa ? { otp } : {}) },
                 });
                 tokens.admin = d.csrfToken;
-                navigate("/admin", { replace: true });
+                navigate(d.mfaSetupRequired ? "/activar-cuenta" : "/admin", {
+                  replace: true,
+                });
               } catch (e: any) {
                 setError(e.message);
                 if (e.code === "MFA_REQUIRED") setMfa(true);
@@ -155,13 +160,15 @@ export function AdminLogin() {
               <ArrowRight size={18} />
             </button>
           </form>
-          <div className="demo-help">
-            <strong>Cuenta de demostración</strong>
-            <br />
-            comite@sivee.demo
-            <br />
-            Contraseña: DemoSivee2026!
-          </div>
+          {site.mode === "DEMO" && (
+            <div className="demo-help">
+              <strong>Cuenta de demostración</strong>
+              <br />
+              comite@sivee.demo
+              <br />
+              Contraseña: DemoSivee2026!
+            </div>
+          )}
         </div>
         <small>
           <LockKeyhole size={14} /> Las acciones administrativas quedan
@@ -172,6 +179,7 @@ export function AdminLogin() {
   );
 }
 export function AdminShell() {
+  const site = useSite();
   const [user, setUser] = useState<any>();
   const [elections, setElections] = useState<any[]>([]);
   const [id, setId] = useState("");
@@ -191,6 +199,10 @@ export function AdminShell() {
     api("/admin/me")
       .then((u) => {
         tokens.admin = u.csrfToken;
+        if (u.mfaSetupRequired) {
+          navigate("/activar-cuenta", { replace: true });
+          return;
+        }
         setUser(u);
         return load();
       })
@@ -202,6 +214,12 @@ export function AdminShell() {
   const election = elections.find((e) => e.id === id);
   const can = (p: string) => user && hasPermission(user.grants, p, id);
   const nav = [
+    {
+      to: "/admin/mesa",
+      label: "Mesa y cabinas",
+      icon: ShieldCheck,
+      p: "desk:verify",
+    },
     {
       to: "/admin",
       label: "Vista general",
@@ -291,7 +309,9 @@ export function AdminShell() {
           </button>
           <div className="workspace-tag">
             <span className="dot" /> COMITÉ ELECTORAL{" "}
-            <small>Simulación 2026</small>
+            <small>
+              {site.mode === "DEMO" ? "Simulación 2026" : site.institution}
+            </small>
           </div>
           <nav>
             {nav
@@ -309,11 +329,13 @@ export function AdminShell() {
               ))}
           </nav>
           <div className="sidebar-bottom">
-            <div className="demo-box">
-              <ShieldCheck size={21} />
-              <strong>Un espacio de prueba</strong>
-              <p>Esta jornada utiliza únicamente datos ficticios.</p>
-            </div>
+            {site.mode === "DEMO" && (
+              <div className="demo-box">
+                <ShieldCheck size={21} />
+                <strong>Un espacio de prueba</strong>
+                <p>Esta jornada utiliza únicamente datos ficticios.</p>
+              </div>
+            )}
             <div className="user-line">
               <div className="avatar small">{user.name[0]}</div>
               <div>
@@ -348,7 +370,9 @@ export function AdminShell() {
                 Espacio electoral <span>/</span> Municipio Escolar
               </span>
             </div>
-            <span className="demo-pill">MODO DEMO</span>
+            <span className="demo-pill">
+              {site.mode === "DEMO" ? "MODO DEMO" : "COMITÉ ELECTORAL"}
+            </span>
           </header>
           <main className="admin-main">
             {elections.length > 1 && (
@@ -1133,7 +1157,7 @@ export function Lists() {
                 checked={form.active}
                 onChange={(e) => setForm({ ...form, active: e.target.checked })}
               />{" "}
-              Lista activa y aprobada para la simulación
+              Lista activa y aprobada para la elección
             </label>
             {error && <Notice>{error}</Notice>}
             <button className="button full" disabled={busy}>
@@ -1310,6 +1334,7 @@ export function Results() {
   );
 }
 export function Settings() {
+  const site = useSite();
   const { election, id, refresh, setId, can } = useAdmin();
   const [form, setForm] = useState<any>();
   const [error, setError] = useState("");
@@ -1329,6 +1354,7 @@ export function Settings() {
         regulation: election.regulation,
         contact: election.contact,
         shifts: election.windows.map((w: any) => w.shift),
+        authMode: election.authMode,
       });
   }, [id, election?.state, newElection]);
   async function run(fn: () => Promise<void>) {
@@ -1352,9 +1378,10 @@ export function Settings() {
       scope: "Municipio escolar · Secundaria",
       blankAllowed: true,
       nullAllowed: true,
-      regulation: "Reglamento de simulación 2026",
+      regulation: "Reglamento electoral institucional 2026",
       contact: "Solicita ayuda a tu mesa de votación.",
       shifts: ["MANANA", "TARDE"],
+      authMode: "DESK",
     });
   }
   const editable = newElection || election?.state === "BORRADOR";
@@ -1392,7 +1419,11 @@ export function Settings() {
         >
           <div className="panel-heading">
             <h2>{newElection ? "Nueva elección" : "Datos de la elección"}</h2>
-            <span className="demo-pill">DEMO · DATOS FICTICIOS</span>
+            <span className="demo-pill">
+              {site.mode === "DEMO"
+                ? "DEMO · DATOS FICTICIOS"
+                : "ELECCIÓN OFICIAL"}
+            </span>
           </div>
           <fieldset disabled={!editable || busy}>
             <Field label="Nombre de la elección">
@@ -1501,8 +1532,8 @@ export function Settings() {
             <div>
               <h2>Lista para recibir las voces</h2>
               <p>
-                Al preparar se comprobarán el padrón, las credenciales y las 2–4
-                listas aprobadas. La configuración quedará protegida.
+                Al preparar se comprobarán el padrón, el acceso de los electores
+                y las 2–4 listas aprobadas. La configuración quedará protegida.
               </p>
             </div>
             {election.state === "BORRADOR" && can("elections:prepare") ? (
@@ -1513,23 +1544,25 @@ export function Settings() {
               <Badge state={election.state} />
             )}
           </section>
-          {can("demo:reset") && (
-            <section className="panel reset-panel">
-              <div>
-                <h2>Volver a ensayar</h2>
-                <p>
-                  Crea una nueva simulación con el mismo padrón y listas. La
-                  jornada anterior se conserva archivada.
-                </p>
-              </div>
-              <button
-                className="button secondary"
-                onClick={() => setModal("reset")}
-              >
-                <RefreshCw size={16} /> Nueva simulación
-              </button>
-            </section>
-          )}
+          {site.mode === "DEMO" &&
+            election.authMode === "CODE" &&
+            can("demo:reset") && (
+              <section className="panel reset-panel">
+                <div>
+                  <h2>Volver a ensayar</h2>
+                  <p>
+                    Crea una nueva simulación con el mismo padrón y listas. La
+                    jornada anterior se conserva archivada.
+                  </p>
+                </div>
+                <button
+                  className="button secondary"
+                  onClick={() => setModal("reset")}
+                >
+                  <RefreshCw size={16} /> Nueva simulación
+                </button>
+              </section>
+            )}
         </>
       )}
       {modal && (
@@ -1542,7 +1575,7 @@ export function Settings() {
           <p>
             {modal === "reset"
               ? "La elección anterior y sus papeletas se conservarán. La nueva simulación empezará sin votos, en preparación."
-              : "Verifica que el padrón y las listas corresponden a esta simulación. Después de preparar no podrás modificarlos."}
+              : "Verifica que el padrón y las listas corresponden a esta elección. Después de preparar no podrás modificarlos."}
           </p>
           {modal === "reset" && (
             <Field label="Escribe NUEVA SIMULACION">
@@ -1587,6 +1620,16 @@ export function Settings() {
   );
 }
 const auditLabels: Record<string, string> = {
+  BOOTH_CREATED: "Cabina registrada",
+  BOOTH_PAIRED: "Navegador de cabina activado",
+  BOOTH_PAIRING_REQUESTED: "Activación de cabina solicitada",
+  BOOTH_UPDATED: "Cabina desactivada o reasignada",
+  IDENTITY_VERIFIED: "Identidad cotejada por la mesa",
+  ADMISSION_CANCELLED: "Autorización cancelada",
+  SCHOOL_ROSTER_STAGED: "Archivo escolar recibido para revisión",
+  SCHOOL_ROSTER_CORRECTED: "Registro escolar corregido",
+  SCHOOL_SHIFT_ASSIGNED: "Turno asignado explícitamente",
+  SCHOOL_ROSTER_CONFIRMED: "Padrón escolar confirmado",
   DEMO_SEEDED: "Datos ficticios preparados",
   ELECTION_PREPARED: "Elección preparada",
   WINDOW_OPEN: "Turno abierto",
@@ -1823,10 +1866,45 @@ export function Incidents() {
 }
 export function Security() {
   const { user } = useAdmin();
+  return <MfaSetup initialEnabled={user.mfaEnabled} />;
+}
+export function ActivateAccount() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(),
+    [error, setError] = useState("");
+  useEffect(() => {
+    api("/admin/me")
+      .then((u) => {
+        tokens.admin = u.csrfToken;
+        setUser(u);
+        if (!u.mfaSetupRequired) navigate("/admin", { replace: true });
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+  return (
+    <main className="standalone-panel">
+      <Brand />
+      {error && <Notice>{error}</Notice>}
+      {user && (
+        <MfaSetup
+          initialEnabled={false}
+          onEnabled={() => navigate("/admin", { replace: true })}
+        />
+      )}
+    </main>
+  );
+}
+function MfaSetup({
+  initialEnabled,
+  onEnabled,
+}: {
+  initialEnabled: boolean;
+  onEnabled?: () => void;
+}) {
   const [password, setPassword] = useState("");
   const [setup, setSetup] = useState<any>();
   const [code, setCode] = useState("");
-  const [enabled, setEnabled] = useState(user.mfaEnabled);
+  const [enabled, setEnabled] = useState(initialEnabled);
   const [error, setError] = useState("");
   return (
     <>
@@ -1887,6 +1965,7 @@ export function Security() {
                 setSetup(undefined);
                 setCode("");
                 setEnabled(true);
+                onEnabled?.();
               } catch (e: any) {
                 setError(e.message);
               }
@@ -2068,6 +2147,7 @@ export function Accounts() {
 }
 
 function InstitutionSchedule() {
+  const site = useSite();
   const { election, id, refresh } = useAdmin();
   const [institution, setInstitution] = useState<any>();
   const [times, setTimes] = useState<any[]>([]);
@@ -2099,6 +2179,33 @@ function InstitutionSchedule() {
       </p>
       {error && <Notice>{error}</Notice>}
       {message && <Notice success>{message}</Notice>}
+      <Field label="Escudo institucional (PNG o JPEG)">
+        <input
+          type="file"
+          accept=".png,.jpg,.jpeg"
+          disabled={busy}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setBusy(true);
+            setError("");
+            try {
+              if (file.size > 600000)
+                throw new Error("El escudo debe ocupar como máximo 600 KB.");
+              await api("/admin/institution/crest", {
+                method: "POST",
+                body: { base64: await readBase64(file) },
+              });
+              await site.refresh();
+              setMessage("Escudo institucional actualizado.");
+            } catch (e: any) {
+              setError(e.message);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      </Field>
       {institution && (
         <form
           onSubmit={async (e) => {
@@ -2112,6 +2219,7 @@ function InstitutionSchedule() {
               });
               await refresh();
               setMessage("Institución guardada.");
+              await site.refresh();
             } catch (e: any) {
               setError(e.message);
             } finally {

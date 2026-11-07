@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Download, Upload, Plus, LockKeyhole, RefreshCw } from "lucide-react";
 import { useAdmin } from "./Admin";
+import { SchoolRoster } from "./SchoolRoster";
 import {
   api,
   Badge,
@@ -46,6 +47,7 @@ function base64(file: File): Promise<string> {
 export function Roster() {
   const context = useAdmin();
   if (!context.election) return <Empty>Crea una elección.</Empty>;
+  if (context.election.authMode === "DESK") return <SchoolRoster />;
   return <RosterScreen key={context.id} {...context} />;
 }
 function RosterScreen({ id, election, can }: any) {

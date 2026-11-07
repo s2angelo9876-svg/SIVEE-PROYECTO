@@ -1,6 +1,12 @@
-# SIVEE · Sistema de Votación Electrónica Escolar
+# SIVEE · Votación presencial escolar
 
-Implementación del SDD del 5 de noviembre de 2026 para la **simulación con datos ficticios**. React + Vite + TypeScript + Tailwind, Express, PostgreSQL 17, Prisma y eventos SSE.
+La nueva modalidad usa DNI en cabinas activadas y verificación presencial de mesa. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco.
+
+**Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
+
+**Desarrollo local:** `npm install` y `npm run dev` desde la raíz, con Docker Desktop iniciado. Para ensayar el nuevo flujo crea una nueva elección desde Configuración; usa Mesa y cabinas para activar los navegadores.
+
+React + Vite + TypeScript + Tailwind, Express, PostgreSQL 17, Prisma y eventos SSE. Incluye el entorno de ensayo del SDD del 5 de noviembre de 2026 y la nueva modalidad presencial.
 
 ## Iniciar en tu computadora
 
@@ -90,6 +96,7 @@ npm run lint
 npm run typecheck
 npm run test:unit
 npm run test:integration
+npm run test:production
 npm run build
 npx playwright install chromium
 npm run test:e2e                 # requiere npm run dev y Chromium
@@ -116,4 +123,4 @@ En Linux/macOS: `npm run build` y `WEB_ORIGIN=http://localhost:5000 npm start`. 
 
 ## Alcance de la entrega
 
-Esta entrega permite la simulación del SDD. No constituye una certificación de seguridad, autorización normativa ni despliegue oficial. Requiere validación del Comité, TLS y prueba en infraestructura final antes de usar datos reales. No implementa anonimato criptográfico verificable ni garantiza RPO=0 frente a pérdida física del servidor. El estado de cada requisito y los trabajos institucionales pendientes están en `docs/IMPLEMENTACION.md`.
+Esta entrega implementa el flujo presencial con DNI y mesa, además de conservar las simulaciones del SDD. No constituye una certificación de seguridad, autorización normativa ni despliegue oficial. Requiere validación del Comité, TLS y prueba en infraestructura final antes de usar datos reales. No implementa anonimato criptográfico verificable ni garantiza RPO=0 frente a pérdida física del servidor. La puesta en servicio y los requisitos institucionales están en [PRODUCCION.md](docs/PRODUCCION.md); `docs/IMPLEMENTACION.md` conserva la trazabilidad de la entrega anterior.

@@ -4,6 +4,8 @@ import { rateLimit } from "express-rate-limit";
 import PDFDocument from "pdfkit";
 import { db } from "./db.js";
 import { config } from "./config.js";
+import { deskAdmin } from "./desk.js";
+import { schoolRoster } from "./school-roster.js";
 import { issueSession, adminAuth, permit, cookieOptions } from "./auth.js";
 import {
   AppError,
@@ -73,17 +75,17 @@ admin.post(
           "Ingresa el código de tu aplicación de autenticación.",
         );
     }
-    if (config.SIVEE_ENV === "production" && !user.mfaEnabled)
-      throw new AppError(
-        403,
-        "MFA_REQUIRED",
-        "Esta cuenta requiere MFA antes del despliegue oficial.",
-      );
-    const session = await issueSession(res, "admin", { adminId: user.id });
+    const mfaSetupRequired =
+      config.SIVEE_ENV === "production" && !user.mfaEnabled;
+    const session = await issueSession(res, "admin", {
+      adminId: user.id,
+      purpose: mfaSetupRequired ? "MFA_SETUP" : "FULL",
+    });
     await audit(db, user.id, null, "ADMIN_LOGIN");
     res.json({
       data: {
         ...session,
+        mfaSetupRequired,
         user: {
           id: user.id,
           name: user.name,
@@ -96,6 +98,8 @@ admin.post(
   },
 );
 admin.use(adminAuth);
+admin.use(deskAdmin);
+admin.use(schoolRoster);
 admin.get("/me", (_req, res) => {
   const u = res.locals.admin;
   res.json({
@@ -105,6 +109,7 @@ admin.get("/me", (_req, res) => {
       email: u.email,
       grants: u.grants,
       mfaEnabled: u.mfaEnabled,
+      mfaSetupRequired: res.locals.adminSession.purpose === "MFA_SETUP",
       csrfToken: res.locals.csrfToken,
     },
   });
@@ -124,6 +129,64 @@ admin.get("/institution", permit("elections:read"), async (_req, res) => {
     }),
   });
 });
+admin.post(
+  "/institution/crest",
+  permit("elections:write"),
+  async (req, res) => {
+    const { base64 } = z
+      .object({
+        base64: z
+          .string()
+          .min(1)
+          .max(900000)
+          .regex(/^[A-Za-z0-9+/]*={0,2}$/),
+      })
+      .strict()
+      .parse(req.body);
+    const image = Buffer.from(base64, "base64");
+    requireState(
+      image.length <= 600000,
+      "El escudo debe ocupar como máximo 600 KB.",
+    );
+    const png = image
+      .subarray(0, 8)
+      .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const jpeg = image[0] === 255 && image[1] === 216;
+    requireState(png || jpeg, "Utiliza un escudo PNG o JPEG.");
+    const document = new PDFDocument();
+    document.resume();
+    try {
+      const raster = (document as any).openImage(image);
+      requireState(
+        raster.width > 0 &&
+          raster.height > 0 &&
+          raster.width <= 2048 &&
+          raster.height <= 2048,
+        "El escudo debe medir como máximo 2048 × 2048 píxeles.",
+      );
+      document.image(image, { width: 64 });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(400, "INVALID_IMAGE", "La imagen no es válida.");
+    } finally {
+      document.end();
+    }
+    await db.$transaction(async (tx) => {
+      const institutionId = res.locals.admin.institutionId;
+      await tx.institutionBranding.upsert({
+        where: { institutionId },
+        create: {
+          institutionId,
+          mime: png ? "image/png" : "image/jpeg",
+          image,
+        },
+        update: { mime: png ? "image/png" : "image/jpeg", image },
+      });
+      await audit(tx, res.locals.admin.id, null, "INSTITUTION_CREST_UPDATED");
+    });
+    res.json({ data: { ok: true } });
+  },
+);
 admin.patch("/institution", permit("elections:write"), async (req, res) => {
   const input = z
     .object({
@@ -210,10 +273,16 @@ admin.get("/elections", async (_req, res) => {
 admin.post("/elections", permit("elections:write"), async (req, res) => {
   const { shifts, ...input } = electionSchema.parse(req.body);
   const u = res.locals.admin;
+  const authMode = input.authMode || "DESK";
+  requireState(
+    config.SIVEE_ENV !== "production" || authMode === "DESK",
+    "Las elecciones oficiales requieren verificación de mesa.",
+  );
   const e = await db.$transaction(async (tx) => {
     const e = await tx.election.create({
       data: {
         ...input,
+        authMode,
         institutionId: u.institutionId,
         mode: config.SIVEE_ENV === "production" ? "OFICIAL" : "DEMO",
         windows: { create: shifts.map((shift) => ({ shift })) },
@@ -240,6 +309,10 @@ admin.patch("/elections/:id", permit("elections:write"), async (req, res) => {
   const e = await db.$transaction(async (tx) => {
     const e = await lockElection(tx, String(req.params.id), true);
     requireState(e.state === "BORRADOR");
+    requireState(
+      !input.authMode || input.authMode === e.authMode,
+      "La modalidad de identificación se fija al crear la elección.",
+    );
     requireState(
       shifts.length === e.windows.length &&
         shifts.every((s) => e.windows.some((w) => w.shift === s)),
@@ -277,10 +350,34 @@ admin.post(
         "Se requieren entre dos y cuatro listas activas.",
       );
       requireState(p.eligible > 0, "Importa un padrón habilitado.");
-      requireState(
-        credentials >= p.eligible,
-        "Hay electores sin credenciales vigentes.",
-      );
+      if (e.authMode === "CODE")
+        requireState(
+          credentials >= p.eligible,
+          "Hay electores sin credenciales vigentes.",
+        );
+      else {
+        requireState(
+          (await tx.schoolDraft.count({
+            where: { electionId: e.id, publishedAt: null },
+          })) === 0,
+          "Confirma o resuelve los registros del borrador escolar antes de preparar.",
+        );
+        requireState(
+          (await tx.participation.count({
+            where: {
+              electionId: e.id,
+              shift: { notIn: e.windows.map((w) => w.shift) },
+            },
+          })) === 0,
+          "Hay electores sin turno válido.",
+        );
+        requireState(
+          (await tx.booth.count({
+            where: { electionId: e.id, active: true, tokenHash: { not: null } },
+          })) > 0,
+          "Activa al menos una cabina de votación antes de preparar.",
+        );
+      }
       if (e.mode === "OFICIAL")
         requireState(
           (process.env.INSTITUTIONAL_APPROVAL_REFERENCE?.trim().length || 0) >
@@ -837,6 +934,9 @@ admin.get(
   async (req, res) => {
     const r = await publishedReport(String(req.params.id));
     const s = r.summary as any;
+    const branding = await db.institutionBranding.findUnique({
+      where: { institutionId: res.locals.admin.institutionId },
+    });
     await audit(db, res.locals.admin.id, r.electionId, "REPORT_PDF_EXPORTED");
     res.attachment("sivee-acta-final.pdf").type("application/pdf");
     const doc = new PDFDocument({
@@ -845,10 +945,13 @@ admin.get(
       info: { Title: "SIVEE · Acta de escrutinio" },
     });
     doc.pipe(res);
-    doc.fillColor("#12594f").fontSize(27).text("SIVEE");
+    if (branding)
+      doc.image(Buffer.from(branding.image), 480, 42, { fit: [60, 80] });
+    doc.fillColor("#0b1f3a").fontSize(27).text("SIVEE");
     doc.fontSize(11).text("SISTEMA DE VOTACIÓN ELECTRÓNICA ESCOLAR");
     doc.moveDown(2);
-    doc.fillColor("#172c2a").fontSize(20).text("Acta de escrutinio");
+    doc.fillColor("#b91c2b").fontSize(20).text("Acta de escrutinio");
+    doc.fillColor("#0b1f3a");
     doc.fontSize(12).text(s.electionName).text(s.institution).moveDown();
     doc
       .fontSize(10)
@@ -893,7 +996,9 @@ admin.get(
     doc
       .fontSize(9)
       .text(
-        "SIMULACIÓN con datos ficticios. Esta acta no certifica una elección oficial.",
+        s.mode === "OFICIAL"
+          ? "Acta del proceso electoral. La proclamación corresponde al Comité Electoral."
+          : "SIMULACIÓN con datos ficticios. Esta acta no certifica una elección oficial.",
       );
     doc.end();
   },
@@ -1013,7 +1118,7 @@ admin.post("/demo/:id/reset", permit("demo:reset"), async (req, res) => {
   const result = await db.$transaction(
     async (tx) => {
       const old = await lockElection(tx, String(req.params.id), true);
-      requireState(old.mode === "DEMO");
+      requireState(old.mode === "DEMO" && old.authMode === "CODE");
       const lists = await tx.electoralList.findMany({
         where: { electionId: old.id },
       });

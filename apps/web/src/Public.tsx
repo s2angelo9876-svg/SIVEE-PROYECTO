@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BoothIdentity } from "./Booth";
+import { useSite } from "./Site";
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,11 +34,20 @@ import {
   shiftLabel,
 } from "./lib";
 export function Brand() {
+  const site = useSite();
   return (
     <Link to="/" className="brand" aria-label="SIVEE, inicio">
-      <span className="brand-mark">
-        <Vote size={25} />
-      </span>
+      {site.crestUrl ? (
+        <img
+          className="school-crest"
+          src={site.crestUrl}
+          alt={"Escudo de " + site.institution}
+        />
+      ) : (
+        <span className="brand-mark">
+          <Vote size={25} />
+        </span>
+      )}
       <span>
         SIVEE<small>Tu voz cuenta.</small>
       </span>
@@ -44,11 +55,16 @@ export function Brand() {
   );
 }
 export function PublicHeader() {
+  const site = useSite();
   return (
     <header className="public-header">
       <Brand />
       <div className="header-right">
-        <span className="demo-pill">ENTORNO DE SIMULACIÓN</span>
+        <span className="demo-pill">
+          {site.mode === "DEMO"
+            ? "ENTORNO DE SIMULACIÓN"
+            : "ELECCIONES ESCOLARES"}
+        </span>
         <Link to="/admin/login" className="staff-link">
           <LockKeyhole size={15} /> Acceso del comité <ArrowRight size={15} />
         </Link>
@@ -75,9 +91,9 @@ export function PublicFooter() {
           onClose={() => setOpen(false)}
         >
           <p>
-            Esta simulación utiliza datos ficticios. La identidad permite
-            comprobar tu habilitación; la papeleta se guarda por separado. El
-            sistema no entrega una constancia de tu preferencia.
+            La identidad permite comprobar tu habilitación; la papeleta se
+            guarda por separado. El sistema no entrega una constancia de tu
+            preferencia.
           </p>
           <p>
             Puedes navegar con Tab, seleccionar opciones con el teclado y
@@ -207,8 +223,9 @@ export function Landing() {
             <h2>Tu participación, en tres pasos.</h2>
           </div>
           <p>
-            Ten a mano tu documento de prueba
-            <br />y tu código individual de acceso.
+            {e?.authMode === "CODE"
+              ? "Ten a mano tu documento y código de simulación."
+              : "Ten a mano tu DNI. La mesa verificará tu identidad antes de abrir la cédula."}
           </p>
         </section>
         <section className="landing-steps">
@@ -217,7 +234,10 @@ export function Landing() {
               n: "01",
               icon: GraduationCap,
               title: "Identifícate",
-              desc: "Ingresa tu documento y el código que te entregó la mesa.",
+              desc:
+                e?.authMode === "CODE"
+                  ? "Ingresa tu documento y el código de simulación."
+                  : "Ingresa tu DNI en una cabina y espera la verificación presencial de la mesa.",
             },
             {
               n: "02",
@@ -245,7 +265,7 @@ export function Landing() {
         <div className="school-note">
           <GraduationCap size={20} />
           <span>{e?.institution || "SIVEE · Comunidad educativa"}</span>
-          <span>Datos ficticios · Demostración</span>
+          {e?.mode === "DEMO" && <span>Datos ficticios · Demostración</span>}
         </div>
       </main>
       <PublicFooter />
@@ -265,6 +285,7 @@ export function VoterFlow() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const lastAction = useRef(Date.now());
+  const authorizationEnds = useRef<number | null>(null);
   const idem = useRef("");
   const [remaining, setRemaining] = useState(300);
   useEffect(() => {
@@ -293,12 +314,20 @@ export function VoterFlow() {
     window.addEventListener("pointerdown", activity);
     window.addEventListener("keydown", activity);
     const timer = setInterval(() => {
-      const left = 300 - Math.floor((Date.now() - lastAction.current) / 1000);
+      const left =
+        authorizationEnds.current !== null
+          ? Math.max(
+              0,
+              Math.ceil((authorizationEnds.current - Date.now()) / 1000),
+            )
+          : 300 - Math.floor((Date.now() - lastAction.current) / 1000);
       setRemaining(left);
       if (left <= 0) {
         void clearSession();
         setStep(0);
-        setError("La sesión terminó por inactividad. Identifícate nuevamente.");
+        setError(
+          "La sesión terminó. Solicita una nueva verificación a la mesa.",
+        );
       }
     }, 1000);
     return () => {
@@ -350,6 +379,7 @@ export function VoterFlow() {
         body: { electionId: e.id, dni, accessCode: code },
       });
       tokens.voter = data.csrfToken;
+      authorizationEnds.current = null;
       setDni("");
       setCode("");
       lastAction.current = Date.now();
@@ -427,7 +457,30 @@ export function VoterFlow() {
           </div>
         )}
         {error && <Notice>{error}</Notice>}
-        {step === 0 && (
+        {step === 0 && !e && (
+          <Notice>
+            {e === undefined
+              ? "Cargando la jornada electoral…"
+              : "Aún no hay una elección disponible. Consulta al comité."}
+          </Notice>
+        )}
+        {step === 0 && e?.authMode === "DESK" && (
+          <BoothIdentity
+            electionId={e.id}
+            onAuthenticated={(data) => {
+              tokens.voter = data.csrfToken;
+              authorizationEnds.current =
+                Date.now() + data.expiresInSeconds * 1000;
+              lastAction.current =
+                Date.now() - (300 - data.expiresInSeconds) * 1000;
+              setRemaining(data.expiresInSeconds);
+              setIdentity(data.student);
+              setStep(1);
+              setError("");
+            }}
+          />
+        )}
+        {step === 0 && e && e.authMode !== "DESK" && (
           <div className="login-grid">
             <section className="vote-intro">
               <p className="eyebrow">TU PARTICIPACIÓN EMPIEZA AQUÍ</p>
@@ -629,7 +682,7 @@ export function VoterFlow() {
                     enabled: ballot.nullAllowed,
                     title: "Voto nulo",
                     description:
-                      "Elijo la opción nula autorizada para esta simulación.",
+                      "Elijo la opción nula autorizada para esta elección.",
                   },
                 ]
                   .filter((x) => x.enabled)

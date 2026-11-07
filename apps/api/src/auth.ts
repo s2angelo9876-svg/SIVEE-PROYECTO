@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { z } from "zod";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import {
@@ -10,6 +11,7 @@ import {
 } from "./security.js";
 import { hasPermission } from "../../../packages/shared/domain.js";
 import { audit, type Tx } from "./services.js";
+import { assertAdmission } from "./desk-security.js";
 export const cookieOptions = {
   httpOnly: true,
   secure: config.COOKIE_SECURE === "true",
@@ -19,7 +21,9 @@ export const cookieOptions = {
 export async function issueSession(
   res: Response,
   kind: "voter" | "admin",
-  fields: { studentId: string; electionId: string } | { adminId: string },
+  fields:
+    | { studentId: string; electionId: string; admissionId?: string }
+    | { adminId: string; purpose?: string },
   tx: Tx = db,
 ) {
   const token = newToken();
@@ -52,7 +56,7 @@ export const originGuard = (
     );
   next();
 };
-function csrf(req: Request, token: string) {
+export function csrf(req: Request, token: string) {
   if (
     !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
     !safeEqual(req.get("x-csrf-token") || "", csrfFor(token))
@@ -82,9 +86,11 @@ export async function voterAuth(
       "Tu sesión ha vencido. Vuelve a identificarte.",
     );
   csrf(req, token);
+  if (session.admissionId)
+    await assertAdmission(db, session, req.cookies.sivee_booth);
   res.locals.voter = session;
   res.locals.csrfToken = csrfFor(token);
-  if (!session.consumed)
+  if (!session.consumed && !session.admissionId)
     await db.voterSession.update({
       where: { id: session.id },
       data: { expiresAt: new Date(Date.now() + 300000) },
@@ -111,6 +117,25 @@ export async function adminAuth(
   )
     throw new AppError(401, "UNAUTHENTICATED", "Tu sesión ha vencido.");
   csrf(req, token);
+  if (
+    session.purpose === "MFA_SETUP" &&
+    !["/me", "/mfa/setup", "/mfa/confirm", "/auth/logout"].includes(req.path)
+  )
+    throw new AppError(
+      403,
+      "MFA_SETUP_REQUIRED",
+      "Completa la activación del segundo factor para acceder al panel.",
+    );
+  if (
+    config.SIVEE_ENV === "production" &&
+    session.purpose === "FULL" &&
+    !session.admin.mfaEnabled
+  )
+    throw new AppError(
+      403,
+      "MFA_SETUP_REQUIRED",
+      "Activa el segundo factor antes de continuar.",
+    );
   res.locals.admin = session.admin;
   res.locals.adminSession = session;
   res.locals.csrfToken = csrfFor(token);
@@ -118,6 +143,7 @@ export async function adminAuth(
     where: { id: session.id },
     data: { expiresAt: new Date(Date.now() + 1800000) },
   });
+  res.cookie("sivee_admin", token, { ...cookieOptions, maxAge: 1800000 });
   next();
 }
 export function permit(permission: string) {
@@ -133,6 +159,7 @@ export function permit(permission: string) {
       );
     }
     if (id) {
+      z.uuid().parse(id);
       const e = await db.election.findFirst({
         where: { id, institutionId: user.institutionId },
       });
