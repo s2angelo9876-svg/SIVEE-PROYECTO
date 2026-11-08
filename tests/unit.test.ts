@@ -10,6 +10,7 @@ import {
 import { windowAvailable } from "../apps/api/src/services";
 import { parseRoster } from "../apps/api/src/roster-files";
 import { canonical, digest } from "../apps/api/src/security";
+import { totp } from "../apps/api/src/mfa";
 const electionId = "11111111-1111-4111-8111-111111111111";
 const listId = "22222222-2222-4222-8222-222222222222";
 describe("identidad y cédula estrictas", () => {
@@ -111,5 +112,21 @@ describe("padrón y ventanas", () => {
         { ...w, startsAt: new Date(Date.now() + 60000) },
       ),
     ).toBe(false);
+  });
+});
+
+// Public reference secret and expected values from RFC 6238, SHA-1, six digits.
+describe("TOTP compatible con autenticadores estándar", () => {
+  it.each([
+    [59, "287082"],
+    [1111111109, "081804"],
+    [1111111111, "050471"],
+    [1234567890, "005924"],
+    [2000000000, "279037"],
+    [20000000000, "353130"],
+  ])("coincide con RFC 6238 en t=%i", (seconds, expected) => {
+    expect(
+      totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", Math.floor(seconds / 30)),
+    ).toBe(expected);
   });
 });
