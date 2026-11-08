@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "infra/Dockerfile" },
+  "deploy": {
+    "startCommand": "node dist/ops/check-admin-access.js",
+    "restartPolicyType": "NEVER",
+    "numReplicas": 1
+  }
+}

@@ -13,6 +13,7 @@ await build({
     "scripts/migrate.ts",
     "scripts/bootstrap-production.ts",
     "scripts/recover-account.ts",
+    "scripts/check-admin-access.ts",
   ],
   bundle: true,
   platform: "node",
