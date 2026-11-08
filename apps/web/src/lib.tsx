@@ -99,6 +99,10 @@ export function SymbolIcon({
   name: string;
   size?: number;
 }) {
+  if (/^data:image\/(png|jpeg);base64,/.test(name))
+    return (
+      <img className="list-logo" src={name} width={size} height={size} alt="" />
+    );
   const I =
     ({ sprout: Sprout, sun: Sun, book: BookOpen, star: Star } as any)[name] ||
     Sprout;

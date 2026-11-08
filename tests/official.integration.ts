@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { schoolFixture } from "./school-fixture.js";
+import { logoData, logoPng } from "./list-logo.fixture.js";
 const ownerUrl = new URL(process.env.MIGRATION_DATABASE_URL!),
   appUrl = new URL(process.env.DATABASE_URL!);
 const name = "sivee_test_official" + crypto.randomBytes(4).toString("hex");
@@ -300,21 +301,81 @@ try {
     assert.equal((await req("/booth/pair", "POST", body)).status, 401);
     return session;
   }
+  const uploadedLogo = logoData(logoPng(2, 2, 40000));
+  const imageList = {
+    number: 3,
+    name: "Lista con imagen",
+    symbol: uploadedLogo,
+    color: "#0b1f3a",
+    candidates: [{ name: "Persona Ejemplo", position: "Alcaldía" }],
+    proposal: "",
+    active: true,
+  };
   await check(
-    "Cabina requiere activación de un solo uso; preparar exige cabina activa",
+    "Logos: carga mayor de 32 KB, edición, permisos y validación de contenido",
     async () => {
       for (let number = 1; number <= 2; number++)
         success(
           await call("/lists", {
             number,
             name: "Lista " + number,
-            symbol: "sprout",
+            symbol: number === 1 ? uploadedLogo : "sprout",
             color: "#0b1f3a",
             candidates: [{ name: "Persona Candidata", position: "Alcaldía" }],
             proposal: "",
             active: true,
           }),
         );
+
+      const lists = success(await call("/lists"));
+      const first = lists.find((l: any) => l.number === 1);
+      assert.equal(first.symbol, uploadedLogo);
+      assert.equal(
+        (await db.electoralList.findUniqueOrThrow({ where: { id: first.id } }))
+          .symbol,
+        uploadedLogo,
+      );
+      assert.equal(
+        (await call("/lists", imageList, "POST", observer)).status,
+        403,
+      );
+      for (const symbol of [
+        "data:image/svg+xml;base64,PHN2Zz4=",
+        logoData(Buffer.from("not an image")),
+        logoData(logoPng(1025, 1)),
+        logoData(logoPng(2, 2, 300000)),
+      ])
+        assert.equal(
+          (await call("/lists", { ...imageList, symbol })).status,
+          400,
+        );
+      success(
+        await call(
+          "/lists/" + first.id,
+          { ...imageList, number: 1, name: first.name },
+          "PATCH",
+        ),
+      );
+      assert.equal(
+        (
+          await call(
+            "/lists/" + first.id,
+            { ...imageList, number: 1, symbol: logoData(Buffer.from("bad")) },
+            "PATCH",
+          )
+        ).status,
+        400,
+      );
+      assert.equal(
+        success(await call("/lists")).find((l: any) => l.id === first.id)
+          .symbol,
+        uploadedLogo,
+      );
+    },
+  );
+  await check(
+    "Cabina requiere activación de un solo uso; preparar exige cabina activa",
+    async () => {
       assert.equal((await call("/prepare", {})).status, 409);
       booth = success(
         await call("/desk/booths", {
@@ -331,6 +392,20 @@ try {
       b = await pair(booth.id);
       b2 = await pair(booth2.id);
       success(await call("/prepare", {}));
+      const frozenList = success(await call("/lists")).find(
+        (l: any) => l.number === 1,
+      );
+      assert.equal(
+        (
+          await call(
+            "/lists/" + frozenList.id,
+            { ...imageList, number: 1 },
+            "PATCH",
+          )
+        ).status,
+        409,
+      );
+
       assert.equal((await call(school + "/import", fixture)).status, 409);
       success(
         await call("/windows/MANANA/open", {
@@ -407,6 +482,13 @@ try {
           })
         ).status,
         401,
+      );
+      const ballot = success(
+        await req("/voter/ballot", "GET", undefined, voter),
+      );
+      assert.equal(
+        ballot.lists.find((l: any) => l.number === 1).symbol,
+        uploadedLogo,
       );
       const identity = success(await req("/voter/me", "GET", undefined, voter));
       assert.equal(identity.student.displayName, "Estudiante Sintético 30");

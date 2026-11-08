@@ -70,3 +70,8 @@ Las nuevas elecciones usan DESK; producción exige esta modalidad. CODE se conse
 - En producción, el primer login sin MFA devuelve `mfaSetupRequired:true` y una sesión `MFA_SETUP`: solo permite `/me`, `/mfa/setup`, `/mfa/confirm`, `/auth/logout`. Confirmar TOTP habilita el resto del panel; los siguientes logins requieren OTP.
 
 No se registran documentos, secretos de activación ni preferencias en auditoría. Las papeletas no incluyen estudiante, autorización ni cabina. Las políticas de red privada, supervisión de equipos y verificación presencial se detallan en [Producción](PRODUCCION.md).
+
+
+## Imagen del logo de una lista
+
+`POST /admin/elections/:id/lists` y `PATCH .../lists/:listId` aceptan en `symbol` una imagen `data:image/png;base64,...` o `data:image/jpeg;base64,...`. El servidor verifica formato real, máximo 300 KB y dimensiones de hasta 1024 × 1024; el límite JSON de estas rutas es 512 KB. Se mantienen los símbolos anteriores por compatibilidad. La interfaz convierte los archivos elegidos (PNG/JPG, hasta 5 MB) a PNG de hasta 256 píxeles en su lado mayor. Se requieren los mismos permisos y estado BORRADOR que para editar una lista. El logo viaja en el campo existente y se conserva en la cédula y en los resultados, sin nuevas tablas ni archivos locales.

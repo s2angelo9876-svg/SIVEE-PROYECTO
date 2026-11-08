@@ -47,6 +47,7 @@ app.use(cookieParser());
 app.use(originGuard);
 app.use("/api/v1/admin/elections/:id/roster", express.json({ limit: "8mb" }));
 app.use("/api/v1/admin/institution/crest", express.json({ limit: "1mb" }));
+app.use("/api/v1/admin/elections/:id/lists", express.json({ limit: "512kb" }));
 app.use(express.json({ limit: "32kb" }));
 app.get("/api/v1/health/live", (_req, res) =>
   res.json({ data: { status: "ok", service: "SIVEE" } }),

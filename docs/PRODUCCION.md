@@ -49,6 +49,12 @@ El Excel recibido contiene 1742 estudiantes, sin columna de turno. Detectamos 20
 
 No subas el Excel real, capturas de alumnos ni exportaciones del padrón al repositorio. Limita los operadores autorizados y acuerda la retención de borradores, auditorías y respaldos.
 
+## Logos de las listas
+
+En Listas participantes, Nueva lista y Editar lista permiten subir un logo PNG o JPG de hasta 5 MB, con vista previa. La web lo ajusta a un máximo de 256 píxeles en su lado mayor, conservando proporciones y transparencia, para mantener ligera la cédula. El logo se guarda en PostgreSQL y aparece en administración, cédula, confirmación y resultados. No se borra al redesplegar Railway. Las listas anteriores conservan su símbolo hasta que se editen y se suba una imagen. Los cambios de listas siguen permitidos únicamente en BORRADOR.
+
+Este cambio utiliza el campo existente de símbolo y no requiere migración de base ni reinicializar cuentas. Se aplica desplegando la nueva versión del servicio SIVEE-PROYECTO.
+
 ## Equipos, mesa y votación
 
 - Crea las cabinas desde Mesa y cabinas y asigna cada una a una cuenta de mesa. El comité puede supervisar todas; la mesa solo autoriza sus cabinas.

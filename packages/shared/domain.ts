@@ -49,7 +49,13 @@ export const listSchema = z
   .object({
     number: z.number().int().min(1).max(99),
     name: z.string().trim().min(3).max(100),
-    symbol: z.enum(["sprout", "sun", "book", "star"]),
+    symbol: z.union([
+      z.enum(["sprout", "sun", "book", "star"]),
+      z
+        .string()
+        .max(410000)
+        .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/),
+    ]),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     candidates: z
       .array(

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { readListLogo } from "./list-logo";
 import {
   LayoutDashboard,
   Leaf,
@@ -966,7 +967,7 @@ export function Lists() {
                 setForm({
                   number: lists.length + 1,
                   name: "",
-                  symbol: "sprout",
+                  symbol: "",
                   color: "#167568",
                   candidates: [{ name: "", position: "Alcaldía escolar" }],
                   proposal: "",
@@ -1021,7 +1022,7 @@ export function Lists() {
       {form && (
         <Modal
           title={form.id ? "Editar lista" : "Nueva lista"}
-          onClose={() => setForm(undefined)}
+          onClose={() => !busy && setForm(undefined)}
         >
           <form
             onSubmit={async (e) => {
@@ -1030,6 +1031,8 @@ export function Lists() {
               setError("");
               try {
                 const { id: lid, electionId: _e, ...body } = form;
+                if (!body.symbol.startsWith("data:image/"))
+                  throw new Error("Sube la imagen del logo de la lista.");
                 await api(
                   `/admin/elections/${id}/lists${lid ? "/" + lid : ""}`,
                   { method: lid ? "PATCH" : "POST", body },
@@ -1056,18 +1059,41 @@ export function Lists() {
                   required
                 />
               </Field>
-              <Field label="Símbolo">
-                <select
-                  value={form.symbol}
-                  onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-                >
-                  <option value="sprout">Brote</option>
-                  <option value="sun">Sol</option>
-                  <option value="book">Libro</option>
-                  <option value="star">Estrella</option>
-                </select>
+              <Field
+                label="Logo de la lista"
+                hint="PNG o JPG, hasta 5 MB. Se ajustará automáticamente sin recortar."
+              >
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  disabled={busy}
+                  required={!form.symbol.startsWith("data:image/")}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setBusy(true);
+                    setError("");
+                    try {
+                      const symbol = await readListLogo(file);
+                      setForm((current: any) =>
+                        current ? { ...current, symbol } : current,
+                      );
+                    } catch (error) {
+                      setError((error as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
               </Field>
             </div>
+            {form.symbol.startsWith("data:image/") && (
+              <img
+                className="list-logo-preview"
+                src={form.symbol}
+                alt="Vista previa del logo de la lista"
+              />
+            )}
             <Field label="Nombre de la lista">
               <input
                 value={form.name}

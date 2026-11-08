@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rateLimit } from "express-rate-limit";
 import PDFDocument from "pdfkit";
+import { validateListLogo } from "./list-logo.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { deskAdmin } from "./desk.js";
@@ -776,6 +777,7 @@ admin.get("/elections/:id/lists", permit("lists:read"), async (req, res) =>
 );
 admin.post("/elections/:id/lists", permit("lists:write"), async (req, res) => {
   const input = listSchema.parse(req.body);
+  validateListLogo(input.symbol);
   const l = await db.$transaction(async (tx) => {
     const e = await lockElection(tx, String(req.params.id), true);
     requireState(e.state === "BORRADOR");
@@ -800,6 +802,7 @@ admin.patch(
   permit("lists:write"),
   async (req, res) => {
     const input = listSchema.parse(req.body);
+    validateListLogo(input.symbol);
     const listId = z.uuid().parse(req.params.listId);
     const l = await db.$transaction(async (tx) => {
       const e = await lockElection(tx, String(req.params.id), true);

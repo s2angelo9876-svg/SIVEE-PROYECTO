@@ -1,6 +1,9 @@
+import { validateListLogo } from "../apps/api/src/list-logo";
+import { logoPng, logoData } from "./list-logo.fixture";
 import { describe, it, expect } from "vitest";
 import {
   voterLoginSchema,
+  listSchema,
   voteSchema,
   electoralOutcome,
   assertReconciled,
@@ -128,5 +131,42 @@ describe("TOTP compatible con autenticadores estándar", () => {
     expect(
       totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", Math.floor(seconds / 30)),
     ).toBe(expected);
+  });
+});
+
+describe("logos de listas", () => {
+  it("acepta un PNG real y conserva símbolos de elecciones anteriores", () => {
+    expect(() => validateListLogo(logoData(logoPng()))).not.toThrow();
+    expect(() => validateListLogo("sprout")).not.toThrow();
+  });
+  it("rechaza SVG, enlaces externos y datos arbitrarios en el contrato", () => {
+    const list = {
+      number: 1,
+      name: "Lista de prueba",
+      color: "#0b1f3a",
+      candidates: [{ name: "Persona Ejemplo", position: "Alcaldía" }],
+      proposal: "",
+    };
+    for (const symbol of [
+      "https://example.com/logo.png",
+      "data:image/svg+xml;base64,PHN2Zz4=",
+      "data:text/html;base64,PHNjcmlwdD4=",
+    ])
+      expect(listSchema.safeParse({ ...list, symbol }).success).toBe(false);
+    expect(
+      listSchema.safeParse({ ...list, symbol: logoData(logoPng()) }).success,
+    ).toBe(true);
+  });
+  it("rechaza contenido falso, tipo incorrecto y límites de tamaño y resolución", () => {
+    expect(() =>
+      validateListLogo(logoData(Buffer.from("not a PNG"))),
+    ).toThrow();
+    expect(() =>
+      validateListLogo(logoData(logoPng()).replace("image/png", "image/jpeg")),
+    ).toThrow();
+    expect(() => validateListLogo(logoData(logoPng(1025, 1)))).toThrow(/1024/);
+    expect(() => validateListLogo(logoData(logoPng(2, 2, 300000)))).toThrow(
+      /300 KB/,
+    );
   });
 });

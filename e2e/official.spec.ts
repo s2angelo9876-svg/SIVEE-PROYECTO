@@ -4,6 +4,7 @@ import pg from "pg";
 import crypto from "node:crypto";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { schoolFixture } from "../tests/school-fixture";
+import { logoPng } from "../tests/list-logo.fixture";
 import AxeBuilder from "@axe-core/playwright";
 
 // A separate database/server protects the presentation's existing roster and codes.
@@ -140,16 +141,77 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
     path: "artifacts/official-roster.png",
     fullPage: true,
   });
-  for (let number = 1; number <= 2; number++)
-    await api(root + "/lists", {
-      number,
-      name: "Lista " + number,
-      symbol: "sprout",
-      color: "#0b1f3a",
-      candidates: [{ name: "Candidata de ensayo", position: "Alcaldía" }],
-      proposal: "Propuesta de ensayo",
-      active: true,
+  await page
+    .getByRole("link", { name: "Listas participantes", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Nueva lista", exact: true }).click();
+  await expect(page.getByLabel("Símbolo", { exact: true })).toHaveCount(0);
+  await page.getByLabel(/Logo de la lista/).setInputFiles({
+    name: "lista.png",
+    mimeType: "image/png",
+    buffer: logoPng(900, 200),
+  });
+  const preview = page.getByRole("img", {
+    name: "Vista previa del logo de la lista",
+  });
+  await expect(preview).toBeVisible();
+  await expect(preview).toHaveJSProperty("naturalWidth", 256);
+  await expect(preview).toHaveJSProperty("naturalHeight", 57);
+  await page
+    .getByLabel("Nombre de la lista", { exact: true })
+    .fill("Lista con logo");
+  await page
+    .getByLabel("Nombre de candidatura", { exact: true })
+    .fill("Candidata de ensayo");
+  await page
+    .getByRole("button", { name: "Guardar lista", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator(".managed-list img.list-logo")).toBeVisible();
+  await page.getByRole("button", { name: "Editar lista", exact: true }).click();
+  await expect(preview).toBeVisible();
+  const jpegLogo = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 900;
+    canvas.height = 200;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#b91c2b";
+    context.fillRect(0, 0, 900, 200);
+    return canvas.toDataURL("image/jpeg");
+  });
+  await page
+    .getByLabel(/Logo de la lista/)
+    .setInputFiles({
+      name: "lista.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.from(jpegLogo.split(",")[1], "base64"),
     });
+  await page
+    .getByLabel("Nombre de la lista", { exact: true })
+    .fill("Lista con logo revisada");
+  await page
+    .getByRole("button", { name: "Guardar lista", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Lista con logo revisada", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".managed-list img.list-logo")).toHaveJSProperty(
+    "naturalWidth",
+    256,
+  );
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.screenshot({ path: "artifacts/list-logos.png", fullPage: true });
+  await api(root + "/lists", {
+    number: 2,
+    name: "Lista 2",
+    symbol: jpegLogo,
+    color: "#0b1f3a",
+    candidates: [{ name: "Candidata de ensayo", position: "Alcaldía" }],
+    proposal: "Propuesta de ensayo",
+    active: true,
+  });
   await page.getByRole("link", { name: "Mesa y cabinas", exact: true }).click();
   await page.getByLabel("Nombre de la nueva cabina").fill("Cabina aula 1");
   await page.getByLabel("Responsable de mesa").selectOption(me.id);
@@ -212,8 +274,13 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
     expect(
       (await new AxeBuilder({ page: voter }).analyze()).violations,
     ).toEqual([]);
-    await voter.getByRole("radio", { name: /Voto en blanco/ }).check();
+    await expect(voter.locator(".ballot-card img.list-logo")).toHaveCount(2);
+    await expect(
+      voter.locator(".ballot-card img.list-logo").first(),
+    ).toBeVisible();
+    await voter.getByRole("radio", { name: /Lista 1:/ }).check();
     await voter.getByRole("button", { name: /Revisar mi elección/ }).click();
+    await expect(voter.locator(".review-choice img.list-logo")).toBeVisible();
     await voter.getByRole("button", { name: /Confirmar mi voto/ }).click();
     await expect(
       voter.getByRole("heading", { name: /Gracias por/ }),
