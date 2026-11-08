@@ -19,9 +19,15 @@ try {
     where: { email: input.INITIAL_ADMIN_EMAIL.toLowerCase() },
     select: { active: true, passwordHash: true, mfaEnabled: true },
   });
+  const [adminCount, institutionCount] = await Promise.all([
+    db.admin.count(),
+    db.institution.count(),
+  ]);
   console.log(
     JSON.stringify({
       databaseReachable: true,
+      adminCount,
+      institutionCount,
       accountFound: !!user,
       accountActive: user?.active ?? null,
       passwordMatches: user

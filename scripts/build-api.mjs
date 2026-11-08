@@ -14,6 +14,7 @@ await build({
     "scripts/bootstrap-production.ts",
     "scripts/recover-account.ts",
     "scripts/check-admin-access.ts",
+    "scripts/initialize-production.ts",
   ],
   bundle: true,
   platform: "node",

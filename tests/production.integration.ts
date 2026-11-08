@@ -39,8 +39,7 @@ const checkAccess = (password: string) =>
     }).toString(),
   );
 try {
-  run("dist/ops/migrate.js");
-  run("dist/ops/bootstrap-production.js");
+  run("dist/ops/initialize-production.js");
   client = new pg.Client({ connectionString: original.toString() });
   await client.connect();
   assert.equal(
@@ -62,6 +61,8 @@ try {
     }).toString(),
   );
   assert.equal(missingAccount.accountFound, false);
+  assert.equal(missingAccount.adminCount, 1);
+  assert.equal(missingAccount.institutionCount, 1);
   assert.equal(missingAccount.passwordMatches, null);
   assert.equal(
     checkAccess("UnaClaveDistintaParaElEnsayo123!").passwordMatches,
@@ -124,7 +125,19 @@ try {
   assert.equal((await initialLogin.json()).data.mfaSetupRequired, true);
   assert.equal((await login("UnaClaveDistintaParaElEnsayo123!")).status, 401);
 
-  assert.throws(() => run("dist/ops/bootstrap-production.js"));
+  assert.throws(
+    () => run("dist/ops/initialize-production.js"),
+    (error: any) =>
+      error.status === 1 &&
+      error.stderr.toString().includes("La instalación ya contiene"),
+  );
+  assert.throws(
+    () =>
+      run("dist/ops/initialize-production.js", { MIGRATION_DATABASE_URL: "" }),
+    (error: any) =>
+      error.status === 1 &&
+      !error.stdout.toString().includes("ejecutando bootstrap-production.js"),
+  );
   assert.equal(
     (await client.query("SELECT count(*)::int n FROM admins")).rows[0].n,
     1,

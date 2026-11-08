@@ -2,7 +2,11 @@ import "dotenv/config";
 import { z } from "zod";
 import { config } from "../apps/api/src/config.js";
 import { db } from "../apps/api/src/db.js";
-import { passwordHash, requireState } from "../apps/api/src/security.js";
+import {
+  AppError,
+  passwordHash,
+  requireState,
+} from "../apps/api/src/security.js";
 import { audit } from "../apps/api/src/services.js";
 import { rolePermissions } from "../packages/shared/domain.js";
 try {
@@ -57,7 +61,7 @@ try {
   console.error(
     error instanceof z.ZodError
       ? "Revisa INSTITUTION_CODE, INSTITUTION_NAME y INITIAL_ADMIN_EMAIL/NAME/PASSWORD (contraseña de al menos 16 caracteres)."
-      : (error as any)?.code === "INVALID_STATE"
+      : error instanceof AppError
         ? (error as Error).message
         : "No se pudo inicializar. Comprueba configuración, migraciones y acceso a PostgreSQL.",
   );
