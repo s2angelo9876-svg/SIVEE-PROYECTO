@@ -108,6 +108,69 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
   await expect(
     page.getByRole("heading", { name: "Padrón del colegio", exact: true }),
   ).toBeVisible();
+  const pagedFixture = await schoolFixture(101, false);
+  await page.getByLabel("Archivo institucional").setInputFiles({
+    name: "paginado.xlsx",
+    mimeType:
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from(pagedFixture.file.base64, "base64"),
+  });
+  const rosterPreview = page.getByRole("region", {
+    name: "Vista previa del padrón",
+  });
+  const previewRows = rosterPreview.locator("tbody tr");
+  const nextPage = rosterPreview.getByRole("button", {
+    name: "Siguiente",
+    exact: true,
+  });
+  const previousPage = rosterPreview.getByRole("button", {
+    name: "Anterior",
+    exact: true,
+  });
+  await expect(rosterPreview.getByRole("status")).toHaveText(
+    "Mostrando 1–50 de 101 estudiantes · Página 1 de 3",
+  );
+  await expect(previewRows).toHaveCount(50);
+  await expect(previousPage).toBeDisabled();
+  await expect(previewRows.first()).toContainText("Estudiante Sintético 0");
+  await expect(previewRows.last()).toContainText("Estudiante Sintético 49");
+  await nextPage.click();
+  await expect(previewRows).toHaveCount(50);
+  await expect(rosterPreview.getByRole("status")).toHaveText(
+    "Mostrando 51–100 de 101 estudiantes · Página 2 de 3",
+  );
+  await expect(previewRows.first()).toContainText("Estudiante Sintético 50");
+  await expect(previewRows.last()).toContainText("Estudiante Sintético 99");
+  await nextPage.click();
+  await expect(previewRows).toHaveCount(1);
+  await expect(previewRows.first()).toContainText("Estudiante Sintético 100");
+  await expect(rosterPreview.getByRole("status")).toHaveText(
+    "Mostrando 101–101 de 101 estudiantes · Página 3 de 3",
+  );
+  await expect(nextPage).toBeDisabled();
+  await previousPage.click();
+  await expect(previewRows.first()).toContainText("Estudiante Sintético 50");
+  // Replacing the file resets the page; exactly 50 CSV rows fit on one page.
+  await page.getByLabel("Archivo institucional").setInputFiles({
+    name: "paginado.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      "DNI,CÓDIGO DEL ESTUDIANTE,ESTUDIANTE,GRADO,SECCIÓN\n" +
+        Array.from(
+          { length: 50 },
+          (_, i) =>
+            `${20000000 + i},CSV-${i},Estudiante CSV ${i},PRIMERO,RESPETO`,
+        ).join("\n"),
+    ),
+  });
+  await expect(rosterPreview.getByRole("status")).toHaveText(
+    "Mostrando 1–50 de 50 estudiantes · Página 1 de 1",
+  );
+  await expect(previewRows).toHaveCount(50);
+  await expect(previousPage).toBeDisabled();
+  await expect(nextPage).toBeDisabled();
+  await expect(previewRows.last()).toContainText("Estudiante CSV 49");
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const fixture = await schoolFixture(2, false);
   await page.getByLabel("Archivo institucional").setInputFiles({
     name: "sintetico.xlsx",
@@ -179,13 +242,11 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
     context.fillRect(0, 0, 900, 200);
     return canvas.toDataURL("image/jpeg");
   });
-  await page
-    .getByLabel(/Logo de la lista/)
-    .setInputFiles({
-      name: "lista.jpg",
-      mimeType: "image/jpeg",
-      buffer: Buffer.from(jpegLogo.split(",")[1], "base64"),
-    });
+  await page.getByLabel(/Logo de la lista/).setInputFiles({
+    name: "lista.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from(jpegLogo.split(",")[1], "base64"),
+  });
   await page
     .getByLabel("Nombre de la lista", { exact: true })
     .fill("Lista con logo revisada");

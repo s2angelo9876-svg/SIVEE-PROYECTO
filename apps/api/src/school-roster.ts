@@ -122,7 +122,7 @@ schoolRoster.post(
         total: rows.length,
         pending: rows.filter((r) => r.issues.length).length,
         warnings: parsed.warnings,
-        rows: rows.slice(0, 50).map(({ document, ...r }) => ({
+        rows: rows.map(({ document, ...r }) => ({
           ...r,
           document: document ? "••••" + document.slice(-4) : "Sin documento",
         })),

@@ -141,6 +141,14 @@ try {
       const preview = success(await call(school + "/preview", fixture));
       assert.equal(preview.total, 1742);
       assert.equal(preview.pending, 1742);
+      assert.equal(preview.rows.length, 1742);
+      assert.equal(preview.rows[1741].displayName, "Estudiante Sintético 1741");
+      assert.equal(preview.rows[1741].document, "••••1741");
+      assert.ok(preview.rows.every((r: any) => !/^\d{8}$/.test(r.document)));
+      assert.equal(
+        await db.schoolDraft.count({ where: { electionId: e.id } }),
+        0,
+      );
       assert.equal(
         success(await call(school + "/import", fixture)).count,
         1742,

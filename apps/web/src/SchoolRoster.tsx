@@ -31,6 +31,7 @@ function SchoolRosterScreen() {
   const [query, setQuery] = useState(""),
     [pendingOnly, setPendingOnly] = useState(false),
     [page, setPage] = useState(0);
+  const [previewPage, setPreviewPage] = useState(0);
   const [form, setForm] = useState<any>(),
     [reason, setReason] = useState(""),
     [publish, setPublish] = useState(false),
@@ -174,6 +175,7 @@ function SchoolRosterScreen() {
                 const f = e.target.files?.[0];
                 setSource(undefined);
                 setPreview(undefined);
+                setPreviewPage(0);
                 if (!f) return;
                 void run(async () => {
                   const excel = /\.xlsx$/i.test(f.name);
@@ -202,7 +204,7 @@ function SchoolRosterScreen() {
             />
           </Field>
           {preview && (
-            <div>
+            <div role="region" aria-label="Vista previa del padrón">
               <h3>{preview.total} estudiantes encontrados</h3>
               <p>
                 {preview.pending} necesitan revisión. Guardar esta carga crea un
@@ -222,20 +224,46 @@ function SchoolRosterScreen() {
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.rows.map((r: any) => (
-                      <tr key={r.sourceRow}>
-                        <td>{r.sourceRow}</td>
-                        <td>{r.displayName}</td>
-                        <td>
-                          {r.grade}° {r.section}
-                        </td>
-                        <td>{r.issues.join(" ") || "Listo"}</td>
-                      </tr>
-                    ))}
+                    {preview.rows
+                      .slice(previewPage * 50, (previewPage + 1) * 50)
+                      .map((r: any) => (
+                        <tr key={r.sourceRow}>
+                          <td>{r.sourceRow}</td>
+                          <td>{r.displayName}</td>
+                          <td>
+                            {r.grade}° {r.section}
+                          </td>
+                          <td>{r.issues.join(" ") || "Listo"}</td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
-              <p>Se muestran hasta 50 filas; se revisó el archivo completo.</p>
+              <nav
+                className="roster-actions"
+                aria-label="Paginación de la vista previa"
+              >
+                <button
+                  className="button secondary"
+                  disabled={busy || previewPage === 0}
+                  onClick={() => setPreviewPage(previewPage - 1)}
+                >
+                  Anterior
+                </button>
+                <span role="status">
+                  Mostrando {previewPage * 50 + 1}–
+                  {Math.min((previewPage + 1) * 50, preview.total)} de{" "}
+                  {preview.total} estudiantes · Página {previewPage + 1} de{" "}
+                  {Math.ceil(preview.total / 50)}
+                </span>
+                <button
+                  className="button secondary"
+                  disabled={busy || (previewPage + 1) * 50 >= preview.total}
+                  onClick={() => setPreviewPage(previewPage + 1)}
+                >
+                  Siguiente
+                </button>
+              </nav>
               <button
                 className="button"
                 disabled={busy}
@@ -246,6 +274,7 @@ function SchoolRosterScreen() {
                       body: source,
                     });
                     await load();
+                    setPage(0);
                     setPreview(undefined);
                     setMessage(
                       r.alreadyImported
