@@ -1,6 +1,12 @@
 import { z } from "zod";
 export const shiftSchema = z.enum(["MANANA", "TARDE"]);
 export const uuid = z.uuid();
+export const voterDniLoginSchema = z
+  .object({
+    electionId: uuid,
+    dni: z.string().regex(/^\d{8}$/),
+  })
+  .strict();
 export const voterLoginSchema = z
   .object({
     electionId: uuid,
@@ -84,8 +90,6 @@ export const rosterRowSchema = z
   .strict();
 export const rolePermissions: Record<string, string[]> = {
   COMITE: [
-    "desk:manage",
-    "desk:verify",
     "elections:read",
     "elections:write",
     "elections:prepare",
@@ -119,13 +123,7 @@ export const rolePermissions: Record<string, string[]> = {
     "incidents:write",
   ],
   OBSERVADOR: ["elections:read", "turnout:read", "results:read"],
-  MESA: [
-    "elections:read",
-    "turnout:read",
-    "incidents:read",
-    "incidents:write",
-    "desk:verify",
-  ],
+  MESA: ["elections:read", "turnout:read", "incidents:read", "incidents:write"],
   ADMIN_TECNICO: ["accounts:manage"],
 };
 export function hasPermission(

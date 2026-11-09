@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BoothIdentity } from "./Booth";
+import { DniIdentity } from "./DniIdentity";
 import { useSite } from "./Site";
 import {
   ArrowLeft,
@@ -225,7 +225,7 @@ export function Landing() {
           <p>
             {e?.authMode === "CODE"
               ? "Ten a mano tu documento y código de simulación."
-              : "Ten a mano tu DNI. Puedes votar directamente en una cabina registrada del colegio."}
+              : "Ten a mano tu DNI. Puedes votar directamente cuando tu turno esté abierto."}
           </p>
         </section>
         <section className="landing-steps">
@@ -237,7 +237,7 @@ export function Landing() {
               desc:
                 e?.authMode === "CODE"
                   ? "Ingresa tu documento y el código de simulación."
-                  : "Ingresa tu propio DNI en una cabina registrada para abrir la cédula.",
+                  : "Ingresa tu propio DNI para abrir la cédula. No necesitas autorización de mesa.",
             },
             {
               n: "02",
@@ -463,7 +463,7 @@ export function VoterFlow() {
           </Notice>
         )}
         {step === 0 && e?.authMode === "DESK" && (
-          <BoothIdentity
+          <DniIdentity
             electionId={e.id}
             onAuthenticated={(data) => {
               tokens.voter = data.csrfToken;

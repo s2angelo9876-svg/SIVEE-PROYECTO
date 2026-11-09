@@ -75,29 +75,8 @@ try {
     const data = success(r);
     return { cookie: r.cookies.join("; "), csrf: data.csrfToken };
   }
-  const templateAdmin = await db.admin.findUniqueOrThrow({
-    where: { email: "comite@sivee.demo" },
-  });
-  await db.admin.create({
-    data: {
-      institutionId: templateAdmin.institutionId,
-      name: "Mesa de pruebas",
-      email: "mesa@sivee.demo",
-      passwordHash: templateAdmin.passwordHash,
-      grants: {
-        create: {
-          role: "MESA",
-          permissions: ["desk:verify", "elections:read"],
-          electionScope: "*",
-        },
-      },
-    },
-  });
   const committee = await login("comite@sivee.demo"),
-    observer = await login("observador@sivee.demo"),
-    mesa = await login("mesa@sivee.demo");
-  const me = success(await req("/admin/me", "GET", undefined, committee));
-  const mesaMe = success(await req("/admin/me", "GET", undefined, mesa));
+    observer = await login("observador@sivee.demo");
   async function check(label: string, test: () => Promise<void>) {
     await test();
     passed++;
@@ -288,27 +267,6 @@ try {
       );
     },
   );
-  let booth: any, booth2: any, b: Session, b2: Session;
-  async function pair(boothId: string) {
-    const p = success(
-      await call(`/desk/booths/${boothId}/pairing`, {
-        reason: "Activación del navegador del colegio",
-      }),
-    );
-    const params = new URLSearchParams(new URL(p.url).hash.slice(1));
-    const body = { id: params.get("id"), token: params.get("token") };
-    const response = await req("/booth/pair", "POST", body);
-    success(response);
-    const session = {
-      cookie: response.cookies.find((c) => c.startsWith("sivee_booth="))!,
-      csrf: "",
-    };
-    session.csrf = success(
-      await req("/booth/status", "GET", undefined, session),
-    ).csrfToken;
-    assert.equal((await req("/booth/pair", "POST", body)).status, 401);
-    return session;
-  }
   const uploadedLogo = logoData(logoPng(2, 2, 40000));
   const imageList = {
     number: 3,
@@ -381,24 +339,39 @@ try {
       );
     },
   );
+  const dniResponse = (dni: string) =>
+    req("/voter/dni-sessions", "POST", { electionId: e.id, dni });
+  async function enterDni(dni: string): Promise<Session> {
+    const response = await dniResponse(dni),
+      data = success(response);
+    assert.equal(response.cookies.length, 1);
+    assert.ok(response.cookies[0].startsWith("sivee_voter="));
+    return { cookie: response.cookies[0], csrf: data.csrfToken };
+  }
   await check(
-    "Cabina requiere activación de un solo uso; preparar exige cabina activa",
+    "Preparación sin cabinas ni responsables; horario cerrado impide entrar",
     async () => {
-      assert.equal((await call("/prepare", {})).status, 409);
-      booth = success(
-        await call("/desk/booths", {
-          name: "Cabina 1",
-          assignedAdminId: me.id,
+      assert.equal(await db.booth.count({ where: { electionId: e.id } }), 0);
+      assert.equal((await dniResponse("10000030")).status, 409);
+      success(
+        await call(school + "/import", {
+          requestId: crypto.randomUUID(),
+          individual: {
+            studentCode: "TARDE-PRUEBA",
+            document: "20000002",
+            displayName: "Estudiante del turno tarde",
+            grade: "2",
+            section: "PAZ",
+            shift: "TARDE",
+            enrollment: "DEFINITIVA",
+          },
         }),
       );
-      booth2 = success(
-        await call("/desk/booths", {
-          name: "Cabina 2",
-          assignedAdminId: mesaMe.id,
+      success(
+        await call(school + "/publish", {
+          reason: "Confirmación de estudiante del turno tarde",
         }),
       );
-      b = await pair(booth.id);
-      b2 = await pair(booth2.id);
       success(await call("/prepare", {}));
       const frozenList = success(await call("/lists")).find(
         (l: any) => l.number === 1,
@@ -413,56 +386,40 @@ try {
         ).status,
         409,
       );
-
       assert.equal((await call(school + "/import", fixture)).status, 409);
       success(
         await call("/windows/MANANA/open", {
-          reason: "Inicio del ensayo automatizado",
+          reason: "Inicio del ensayo sin activación de equipos",
         }),
       );
+      assert.equal((await dniResponse("20000002")).status, 409);
+      assert.equal((await req("/booth/status")).status, 404);
       assert.equal(
-        (await req("/booth/requests", "POST", { dni: "10000030" })).status,
-        401,
-      );
-      assert.equal(
-        (
-          await req("/voter/sessions", "POST", {
-            electionId: e.id,
-            dni: "10000030",
-            accessCode: "CUALQUIER-CODIGO",
-          })
-        ).status,
-        403,
+        (await call("/desk/booths", { name: "Sin cabinas" })).status,
+        404,
       );
     },
   );
-  let admission: any, voter: Session;
-  const claim = async (session: Session, requestId: string) => {
-    const r = await req("/booth/claim", "POST", { requestId }, session);
-    const data = success(r);
-    return {
-      cookie:
-        session.cookie +
-        "; " +
-        r.cookies.find((c) => c.startsWith("sivee_voter=")),
-      csrf: data.csrfToken,
-    };
-  };
+  let voter: Session;
   await check(
-    "DNI abre sesión sin aprobación de mesa, solo en cabina registrada y sin afirmar identidad verificada",
+    "Solo DNI desde un navegador nuevo, sin cookies de cabina ni sesión administrativa",
     async () => {
-      admission = success(
-        await req("/booth/requests", "POST", { dni: "10000030" }, b),
+      voter = await enterDni("10000030");
+      const identity = success(await req("/voter/me", "GET", undefined, voter));
+      assert.equal(identity.student.displayName, "Estudiante Sintético 30");
+      const ballot = success(
+        await req("/voter/ballot", "GET", undefined, voter),
       );
-      assert.deepEqual(Object.keys(admission).sort(), ["id", "state"]);
-      assert.equal(admission.state, "APPROVED");
       assert.equal(
-        (await db.admission.findUniqueOrThrow({ where: { id: admission.id } }))
-          .approvedBy,
-        null,
+        ballot.lists.find((l: any) => l.number === 1).symbol,
+        uploadedLogo,
+      );
+      assert.equal(
+        await db.admission.count({ where: { electionId: e.id } }),
+        0,
       );
       const event = await db.audit.findFirstOrThrow({
-        where: { electionId: e.id, action: "DNI_ADMISSION_CREATED" },
+        where: { electionId: e.id, action: "DNI_SESSION_CREATED" },
       });
       assert.equal(event.adminId, null);
       assert.ok(!JSON.stringify(event.detail).includes("10000030"));
@@ -472,85 +429,66 @@ try {
         }),
         0,
       );
-      assert.equal(
-        (
-          await call(
-            `/desk/requests/${admission.id}/cancel`,
-            {
-              reason: "Intento de otra mesa sobre esta cabina",
-            },
-            "POST",
-            mesa,
-          )
-        ).status,
-        403,
-      );
-      assert.equal(
-        (await req("/booth/claim", "POST", { requestId: admission.id }, b2))
-          .status,
-        409,
-      );
-      voter = await claim(b, admission.id);
-      assert.equal(
-        (
-          await req("/voter/me", "GET", undefined, {
-            ...voter,
-            cookie: voter.cookie
-              .split("; ")
-              .find((c) => c.startsWith("sivee_voter="))!,
-          })
-        ).status,
-        401,
-      );
-      const ballot = success(
-        await req("/voter/ballot", "GET", undefined, voter),
-      );
-      assert.equal(
-        ballot.lists.find((l: any) => l.number === 1).symbol,
-        uploadedLogo,
-      );
-      const identity = success(await req("/voter/me", "GET", undefined, voter));
-      assert.equal(identity.student.displayName, "Estudiante Sintético 30");
     },
   );
   await check(
-    "Solicitud antigua se cancela y permite DNI directo; documentos inválidos no abren sesión",
+    "DNI inválido, desconocido, estudiante inactivo y autenticación sin sesión se rechazan",
     async () => {
-      assert.equal(
-        (await req("/booth/requests", "POST", { dni: "bad" }, b2)).status,
-        400,
-      );
-      assert.equal(
-        (await req("/booth/requests", "POST", { dni: "19999999" }, b2)).status,
-        403,
-      );
-      const legacy = success(
-        await req("/booth/requests", "POST", { dni: "10000034" }, b2),
-      );
-      await db.admission.update({
-        where: { id: legacy.id },
-        data: { state: "WAITING" },
+      assert.equal((await dniResponse("bad")).status, 400);
+      assert.equal((await dniResponse("19999999")).status, 403);
+      assert.equal((await req("/voter/me")).status, 401);
+      const student = await db.participation.findFirstOrThrow({
+        where: { electionId: e.id, displayName: "Estudiante Sintético 34" },
+      });
+      await db.student.update({
+        where: { id: student.studentId },
+        data: { active: false },
+      });
+      assert.equal((await dniResponse("10000034")).status, 403);
+      await db.student.update({
+        where: { id: student.studentId },
+        data: { active: true },
       });
       assert.equal(
-        (await req("/booth/claim", "POST", { requestId: legacy.id }, b2))
-          .status,
-        409,
+        (
+          await req("/voter/sessions", "POST", {
+            electionId: e.id,
+            dni: "10000034",
+            accessCode: "CUALQUIER-CODIGO",
+          })
+        ).status,
+        403,
       );
-      success(await req("/booth/cancel", "POST", { requestId: legacy.id }, b2));
-      const direct = success(
-        await req("/booth/requests", "POST", { dni: "10000034" }, b2),
+      assert.equal(
+        (
+          await req("/voter/dni-sessions", "POST", {
+            electionId: e.id,
+            dni: "10000034",
+            approved: true,
+          })
+        ).status,
+        400,
       );
-      assert.equal(direct.state, "APPROVED");
-      await claim(b2, direct.id);
-      success(await req("/booth/cancel", "POST", { requestId: direct.id }, b2));
+      const simulation = await db.election.findFirstOrThrow({
+        where: { authMode: "CODE" },
+      });
+      assert.equal(
+        (
+          await req("/voter/dni-sessions", "POST", {
+            electionId: simulation.id,
+            dni: "10000034",
+          })
+        ).status,
+        403,
+      );
     },
   );
   await check(
-    "Pausa bloquea voto; doble envío concurrente produce una sola papeleta y participación",
+    "Pausa bloquea accesos y votos; doble envío concurrente produce una sola papeleta",
     async () => {
       success(
         await call("/windows/MANANA/pause", {
-          reason: "Pausa durante el ensayo",
+          reason: "Pausa del ensayo de acceso directo",
         }),
       );
       const vote = () =>
@@ -561,13 +499,10 @@ try {
           voter,
         );
       assert.equal((await vote()).status, 409);
-      assert.equal(
-        (await req("/booth/requests", "POST", { dni: "10000034" }, b2)).status,
-        403,
-      );
+      assert.equal((await dniResponse("10000034")).status, 409);
       success(
         await call("/windows/MANANA/open", {
-          reason: "Reanudación del ensayo",
+          reason: "Reanudación del ensayo de acceso directo",
         }),
       );
       const responses = await Promise.all([vote(), vote()]);
@@ -579,107 +514,159 @@ try {
         }),
         1,
       );
-      assert.equal(
-        (await db.admission.findUniqueOrThrow({ where: { id: admission.id } }))
-          .state,
-        "CONSUMED",
-      );
-      assert.equal(
-        (await req("/booth/requests", "POST", { dni: "10000030" }, b)).status,
-        403,
-      );
+      assert.equal((await dniResponse("10000030")).status, 403);
     },
   );
   await check(
-    "Dos cabinas no habilitan al mismo alumno; cancelación revoca sesión inmediatamente",
+    "Dos accesos con el mismo DNI conservan solo la última sesión y un único voto",
     async () => {
       const responses = await Promise.all([
-        req("/booth/requests", "POST", { dni: "10000031" }, b),
-        req("/booth/requests", "POST", { dni: "10000031" }, b2),
+        dniResponse("10000031"),
+        dniResponse("10000031"),
       ]);
-      assert.deepEqual(responses.map((r) => r.status).sort(), [201, 409]);
-      const index = responses.findIndex((r) => r.status === 201),
-        session = [b, b2][index],
-        r = success(responses[index]);
-      const v = await claim(session, r.id);
+      responses.forEach(success);
+      const sessions = responses.map((r) => ({
+        cookie: r.cookies[0],
+        csrf: r.data.data.csrfToken,
+      }));
+      const identities = await Promise.all(
+        sessions.map((s) => req("/voter/me", "GET", undefined, s)),
+      );
+      assert.deepEqual(identities.map((r) => r.status).sort(), [200, 401]);
+      const current = sessions[identities.findIndex((r) => r.status === 200)];
       success(
-        await call(`/desk/requests/${r.id}/cancel`, {
-          identityVerified: false,
-          reason: "Cancelación por discrepancia de identidad",
-        }),
+        await req(
+          "/voter/votes",
+          "POST",
+          { electionId: e.id, kind: "BLANCO" },
+          current,
+        ),
       );
-      assert.equal(
-        (
-          await req(
-            "/voter/votes",
-            "POST",
-            { electionId: e.id, kind: "BLANCO" },
-            v,
-          )
-        ).status,
-        401,
-      );
+      assert.equal((await dniResponse("10000031")).status, 403);
+      assert.equal(await db.ballot.count({ where: { electionId: e.id } }), 2);
     },
   );
   await check(
-    "Revincular navegador invalida sesiones y expirar exige volver a ingresar DNI",
+    "Sesión caduca sin renovarse y permite volver a ingresar; sesiones antiguas exigen DNI nuevo",
     async () => {
-      const r = success(
-        await req("/booth/requests", "POST", { dni: "10000032" }, b),
-      );
-      const v = await claim(b, r.id),
-        oldBooth = b;
-      b = await pair(booth.id);
+      const current = await enterDni("10000032");
+      const before = await db.voterSession.findFirstOrThrow({
+        where: {
+          electionId: e.id,
+          revoked: false,
+          student: {
+            dniLookup: (await import("../apps/api/src/security.js")).dniLookup(
+              "10000032",
+            ),
+          },
+        },
+      });
+      success(await req("/voter/me", "GET", undefined, current));
       assert.equal(
-        (await req("/booth/status", "GET", undefined, oldBooth)).status,
-        401,
+        +(await db.voterSession.findUniqueOrThrow({ where: { id: before.id } }))
+          .expiresAt,
+        +before.expiresAt,
       );
-      assert.equal(
-        (
-          await req(
-            "/voter/votes",
-            "POST",
-            { electionId: e.id, kind: "BLANCO" },
-            v,
-          )
-        ).status,
-        401,
-      );
-      const expired = success(
-        await req("/booth/requests", "POST", { dni: "10000033" }, b),
-      );
-      const ev = await claim(b, expired.id);
-      await db.admission.update({
-        where: { id: expired.id },
+      await db.voterSession.update({
+        where: { id: before.id },
         data: { expiresAt: new Date(Date.now() - 1000) },
       });
-      assert.equal((await req("/voter/me", "GET", undefined, ev)).status, 401);
       assert.equal(
-        success(await req("/booth/requests", "POST", { dni: "10000033" }, b))
-          .state,
-        "APPROVED",
+        (await req("/voter/me", "GET", undefined, current)).status,
+        401,
+      );
+      const legacy = await enterDni("10000032");
+      const admin = await db.admin.findUniqueOrThrow({
+        where: { email: "comite@sivee.demo" },
+      });
+      const legacyBooth = await db.booth.create({
+        data: {
+          electionId: e.id,
+          name: "Cabina histórica desactivada",
+          assignedAdminId: admin.id,
+          active: false,
+        },
+      });
+      const legacyAdmission = await db.admission.create({
+        data: {
+          electionId: e.id,
+          boothId: legacyBooth.id,
+          studentId: before.studentId,
+          state: "APPROVED",
+          expiresAt: new Date(Date.now() + 300000),
+        },
+      });
+      await db.voterSession.updateMany({
+        where: {
+          electionId: e.id,
+          studentId: before.studentId,
+          revoked: false,
+        },
+        data: { admissionId: legacyAdmission.id },
+      });
+      assert.equal(
+        (await req("/voter/me", "GET", undefined, legacy)).status,
+        401,
+      );
+      success(
+        await req("/voter/me", "GET", undefined, await enterDni("10000032")),
       );
     },
   );
   await check(
-    "Cancelación en cola invalida un voto que ya había pasado autenticación",
+    "CSRF, origen y elección ajenos no permiten emitir votos",
     async () => {
-      const r = success(
-        await req("/booth/requests", "POST", { dni: "10000035" }, b2),
+      const current = await enterDni("10000034");
+      assert.equal(
+        (
+          await req(
+            "/voter/votes",
+            "POST",
+            { electionId: e.id, kind: "BLANCO" },
+            { ...current, csrf: "invalid" },
+          )
+        ).status,
+        403,
       );
-      const v = await claim(b2, r.id);
+      assert.equal(
+        (
+          await req(
+            "/voter/votes",
+            "POST",
+            { electionId: crypto.randomUUID(), kind: "BLANCO" },
+            current,
+          )
+        ).status,
+        401,
+      );
+      const response = await fetch(base + "/voter/dni-sessions", {
+        method: "POST",
+        headers: {
+          Origin: "https://untrusted.invalid",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ electionId: e.id, dni: "10000034" }),
+      });
+      assert.equal(response.status, 403);
+      assert.equal(await db.ballot.count({ where: { electionId: e.id } }), 2);
+    },
+  );
+  await check(
+    "Un nuevo acceso en cola revoca un voto que ya había pasado autenticación",
+    async () => {
+      const previous = await enterDni("10000035");
       const gate = new pg.Client({ connectionString: ownerUrl.toString() });
       await gate.connect();
       await gate.query("BEGIN");
-      let cancelling: ReturnType<typeof call> | undefined,
+      let entering: ReturnType<typeof dniResponse> | undefined,
         voting: ReturnType<typeof req> | undefined;
       async function queued(fragment: string) {
         for (let i = 0; i < 100; i++) {
-          const count = await owner.query(
+          const result = await owner.query(
             "SELECT count(*)::int n FROM pg_stat_activity WHERE datname=$1 AND wait_event_type='Lock' AND query LIKE $2",
             [name, "%" + fragment + "%"],
           );
-          if (count.rows[0].n > 0) return;
+          if (result.rows[0].n > 0) return;
           await new Promise((resolve) => setTimeout(resolve, 25));
         }
         throw new Error("No llegó a la barrera: " + fragment);
@@ -688,43 +675,35 @@ try {
         await gate.query("SELECT id FROM elections WHERE id=$1 FOR UPDATE", [
           e.id,
         ]);
-        cancelling = call(`/desk/requests/${r.id}/cancel`, {
-          identityVerified: false,
-          reason: "Cancelación concurrente por la mesa",
-        });
+        entering = dniResponse("10000035");
         await queued("FOR UPDATE");
         voting = req(
           "/voter/votes",
           "POST",
           { electionId: e.id, kind: "BLANCO" },
-          v,
+          previous,
         );
         await queued("FOR SHARE");
       } finally {
         await gate.query("COMMIT");
         await gate.end();
       }
-      success(await cancelling!);
+      success(await entering!);
       assert.equal((await voting!).status, 401);
-      assert.equal(await db.ballot.count({ where: { electionId: e.id } }), 1);
+      assert.equal(await db.ballot.count({ where: { electionId: e.id } }), 2);
     },
   );
   await check(
-    "Salir de la cédula cancela autorización sin impedir al siguiente alumno",
+    "Salir cancela la sesión y permite usar otro dispositivo sin activarlo",
     async () => {
-      const r = success(
-        await req("/booth/requests", "POST", { dni: "10000036" }, b2),
-      );
-      const v = await claim(b2, r.id);
-      success(await req("/voter/logout", "POST", {}, v));
+      const current = await enterDni("10000036");
+      success(await req("/voter/logout", "POST", {}, current));
       assert.equal(
-        (await db.admission.findUniqueOrThrow({ where: { id: r.id } })).state,
-        "CANCELLED",
+        (await req("/voter/me", "GET", undefined, current)).status,
+        401,
       );
-      assert.equal(
-        success(await req("/booth/requests", "POST", { dni: "10000037" }, b2))
-          .state,
-        "APPROVED",
+      success(
+        await req("/voter/me", "GET", undefined, await enterDni("10000036")),
       );
     },
   );

@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db.js";
 import { AppError, requireState, digest } from "./security.js";
-import { assertAdmission } from "./desk-security.js";
 import {
   voteSchema,
   assertReconciled,
@@ -93,11 +92,7 @@ export async function tally(tx: Tx, id: string) {
     outcome: electoralOutcome(lists),
   };
 }
-export async function castVote(
-  sessionId: string,
-  raw: unknown,
-  boothToken?: string,
-) {
+export async function castVote(sessionId: string, raw: unknown) {
   const input = voteSchema.parse(raw);
   return db.$transaction(
     async (tx) => {
@@ -107,6 +102,7 @@ export async function castVote(
       if (
         !initial ||
         initial.revoked ||
+        initial.admissionId ||
         +initial.expiresAt < Date.now() ||
         initial.electionId !== input.electionId
       )
@@ -135,8 +131,6 @@ export async function castVote(
         },
         include: { student: true },
       });
-      if (e.authMode === "DESK")
-        await assertAdmission(tx, currentSession, boothToken);
       if (!p || !p.student.active || p.state === "ANULADA_POR_COMITE")
         throw new AppError(
           403,
@@ -188,11 +182,6 @@ export async function castVote(
         where: { studentId: p.studentId, electionId: e.id },
         data: { consumed: true },
       });
-      if (currentSession.admissionId)
-        await tx.admission.update({
-          where: { id: currentSession.admissionId },
-          data: { state: "CONSUMED" },
-        });
       return { status: "RECORDED" };
     },
     { timeout: 20000 },

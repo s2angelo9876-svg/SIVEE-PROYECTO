@@ -1,6 +1,6 @@
 # SIVEE presencial: instalación y jornada oficial
 
-El alumno ingresa solamente su DNI en una cabina activada y accede directamente a la cédula, sin aprobación de mesa ni códigos individuales. El comité registra y activa cada navegador del colegio una vez. Conocer un DNI no permite votar desde un navegador sin activar, pero sí podría permitir suplantar al estudiante desde una cabina habilitada. El acceso con DNI comprueba elegibilidad, no identidad; el colegio debe supervisar físicamente el uso de sus equipos.
+El alumno abre `/votar`, ingresa solamente su DNI y accede a la cédula cuando la elección y su turno están abiertos. No se registran equipos, asignan responsables ni solicitan códigos o aprobaciones de mesa. Funciona desde cualquier dispositivo con el enlace. Conocer un DNI ajeno podría permitir suplantar al estudiante: el sistema comprueba elegibilidad y voto único, no la identidad de quien usa el documento. El colegio debe organizar la supervisión presencial de la jornada.
 
 ## Desplegar en Railway
 
@@ -26,7 +26,7 @@ La configuración de este repositorio publica React y Express en **un mismo serv
 
    El programa de inicialización ejecuta migración e inicializador en orden, sin depender de que Railway interprete `&&` mediante una shell. Se detiene si falla un paso. La migración crea `sivee_app` si no existe y asigna sus permisos mínimos; no cambia su contraseña si ya existe. El inicializador crea la institución y una primera cuenta con permisos de comité y administrador técnico. Rechaza una base ya inicializada. No crea alumnos, listas, elecciones ni claves conocidas. No ejecutes `setup:demo` ni `seed:demo` en producción. Al finalizar correctamente se imprime «Instalación creada sin estudiantes ni elecciones de ejemplo». Operaciones es una tarea que termina, no un servidor web: no generes un dominio para ella.
 6. Comprueba que operaciones termina correctamente. Retira `INITIAL_ADMIN_PASSWORD` y detén/elimina el servicio temporal. **El servicio API no debe recibir `MIGRATION_DATABASE_URL` ni variables INITIAL_ADMIN/RECOVERY**. Despliega o reinicia SIVEE y comprueba `/api/v1/health/ready` (`database: connected`, `mode: production`). `/api/v1/site` debe indicar `OFICIAL`. Al acceder a `/admin/login` no deben aparecer credenciales de demostración.
-7. Ingresa con la cuenta inicial. El primer acceso solo permite registrar MFA; configura una aplicación TOTP, confirma su código y entra al panel. En Cuentas del personal crea cuentas nominativas de comité, mesa, observación y administración técnica. Cada una registra su propio MFA. Necesitas al menos **dos cuentas distintas de comité** para aprobar cierre/publicación; no compartas contraseñas.
+7. Ingresa con la cuenta inicial. El primer acceso solo permite registrar MFA; configura una aplicación TOTP, confirma su código y entra al panel. En Cuentas del personal crea cuentas nominativas de comité, observación y administración técnica según las funciones necesarias. Cada una registra su propio MFA. No se necesita una cuenta de mesa para habilitar votantes. Necesitas al menos **dos cuentas distintas de comité** para aprobar cierre/publicación; no compartas contraseñas.
 8. En Configuración crea la elección, introduce el nombre oficial del colegio, reglamento y horarios de Lima, y carga el **escudo original PNG o JPEG**, hasta 600 KB y 2048 × 2048. La web y el PDF usan ese escudo. La paleta es azul marino, rojo y blanco. `INSTITUTIONAL_APPROVAL_REFERENCE` debe contener la referencia del acuerdo real del colegio antes de preparar; el texto de esa variable no reemplaza la aprobación institucional.
 
 Para posteriores versiones, respalda y prueba primero en un entorno separado. Ejecuta **solo** `node dist/ops/migrate.js` en el servicio temporal de operaciones, usando una configuración con ese comando de inicio; después despliega la API. No reutilices `/infra/railway.init.json` sin ajustar su comando, pues también intenta inicializar la institución. No vuelvas a ejecutar el inicializador. Las migraciones tienen checksum: no modifiques SQL ya aplicado. Los secretos de búsqueda/cifrado deben permanecer estables al actualizar.
@@ -55,27 +55,27 @@ En Listas participantes, Nueva lista y Editar lista permiten subir un logo PNG o
 
 Este cambio utiliza el campo existente de símbolo y no requiere migración de base ni reinicializar cuentas. Se aplica desplegando la nueva versión del servicio SIVEE-PROYECTO.
 
-## Equipos, mesa y votación
+## Votación directa con DNI
 
-- Crea las cabinas desde Mesa y cabinas y asigna cada una a una cuenta de mesa. El comité puede supervisar todas; la mesa puede cancelar sesiones en sus cabinas. No aprueba cada votante.
-- Genera el enlace de activación y ábrelo **solo en el navegador del equipo del colegio**. Dura diez minutos y funciona una vez. No lo entregues al alumno ni lo publiques. El fragmento se borra de la barra de direcciones. La sesión de cabina usa una cookie protegida; no acredita hardware físico, por lo que se requiere navegador/perfil supervisado, sin extensiones no autorizadas, sincronización ni acceso del alumno a herramientas de desarrollo. La cookie vence a las 24 horas; reactiva antes de otra jornada.
-- Configura la estación de mesa separada de las cabinas; los alumnos no deben tener la sesión administrativa en su equipo. Usa modo kiosco y supervisión del colegio. Desactiva o reasigna una cabina ante pérdida o sospecha: se revocan su navegador y autorizaciones. Reactivar en otro navegador revoca el anterior.
-- Activa al menos una cabina, prepara la elección y abre manualmente el turno correspondiente. Mañana debe cerrarse antes de abrir tarde. Los horarios también limitan la votación.
-- El alumno escribe su propio DNI. Si está habilitado, no ha votado y su turno está abierto, la cédula se abre automáticamente y permite revisar sus datos. El responsable no vuelve a escribir el DNI ni pulsa una aprobación. Esta modalidad elimina la comprobación de identidad por software; la supervisión presencial debe impedir que se utilicen documentos ajenos.
-- La sesión dura cinco minutos desde el ingreso del DNI y sirve solo para ese alumno, elección y cabina. Cancelar, expirar, desactivar o cambiar el navegador impide reutilizarla. Un estudiante no puede mantener sesiones simultáneas en dos cabinas.
-- Al actualizar, una solicitud pendiente `WAITING` del flujo anterior se cancela desde la cabina y se vuelve a ingresar el DNI; no requiere migrar la base ni ejecutar operaciones.
-- El alumno revisa sus datos y emite su voto privado. Un doble envío produce una sola participación/papeleta. La constancia no revela la elección; la mesa no recibe la preferencia. Tras votar se limpia la sesión del alumno. Para el siguiente alumno vuelve al inicio.
+1. Confirma el padrón y sus turnos, registra las listas y prepara la elección. Ya no se exige crear cabinas ni asignar responsables.
+2. Abre manualmente el turno correspondiente desde Jornada electoral. Mañana debe cerrarse antes de abrir tarde; los horarios también limitan la votación.
+3. Abre el enlace `/votar` en las laptops o dispositivos de los estudiantes, sin iniciar una cuenta administrativa en esos equipos. No hay enlaces de activación ni autorización de hardware.
+4. El alumno ingresa su propio DNI. Se comprueba que esté activo, inscrito, pendiente de votar y dentro de su turno. Revisa sus datos, elige y confirma su voto privado.
+5. La sesión dura cinco minutos. Si vence, vuelve a ingresar el DNI. Un nuevo acceso para el mismo estudiante sustituye su sesión anterior, sin crear una segunda participación. Un doble envío del voto produce una sola papeleta.
+6. Tras votar se limpia la sesión del alumno. Para el siguiente alumno vuelve al inicio. No se puede iniciar otra votación con un DNI que ya participó.
+
+Esta actualización no requiere migraciones ni ejecutar operaciones. Se conserva el valor interno `DESK` para compatibilidad con elecciones existentes. Las cabinas, responsables y admisiones anteriores quedan como historial y ya no condicionan el acceso. Si había una sesión antigua abierta, recarga la página e ingresa de nuevo el DNI. Los marcadores `/admin/mesa` y `/cabina/activar` redirigen a Jornada electoral y `/votar`, respectivamente.
 
 ## Incidentes y recuperación
 
 | Caso | Procedimiento |
 | --- | --- |
-| DNI ajeno, datos discrepantes o sospecha de suplantación | Cancelar la sesión antes del voto, registrar incidencia y aplicar la comprobación presencial institucional. Si ya votó, escalar al comité sin borrar ni reasignar su papeleta. Nunca colocar el DNI completo o la preferencia en el motivo. |
+| DNI ajeno, datos discrepantes o sospecha de suplantación | Pedir al estudiante que salga antes del voto, pausar el turno si es necesario, registrar incidencia y aplicar la comprobación presencial institucional. Si ya votó, escalar al comité sin borrar ni reasignar su papeleta. Nunca colocar el DNI completo o la preferencia en el motivo. |
 | Alumno omitido antes de preparar | Alta individual, revisión del documento/turno y confirmación. |
 | Omisión después de preparar o jornada abierta | No hay alta tardía automática. Registrar incidencia y elevar al comité conforme al reglamento; no editar SQL ni abrir otra elección para eludir controles. |
 | El sistema dice que ya participó | Comprobar participación e incidencia. No permitir un segundo voto ni borrar papeletas. La app no puede atribuir una papeleta secreta a una persona. |
 | Se corta la red al confirmar | Conservar la pantalla, reintentar o consultar participación. La transacción es atómica; no contar un éxito sin confirmación del servidor. No hay votos offline. |
-| Cabina congelada o autorización vencida | Mesa cancela la autorización y, si sigue pendiente de votar, verifica otra vez; puede activar otra cabina. |
+| Navegador congelado o sesión vencida | Recargar o abrir otro navegador e ingresar nuevamente el DNI. El nuevo acceso revoca la sesión anterior. Si ya se confirmó el voto, no permite iniciar otra votación. |
 | Corte eléctrico o Internet prolongado | Pausar la jornada, preservar equipos/base y aplicar contingencia aprobada (con UPS/conectividad de respaldo o acta de suspensión). No mezclar papel y sistema sin un procedimiento de conciliación. |
 | Error en turno/horario | Pausar, documentar y revisar estado; una ventana cerrada no se reabre mediante la UI. |
 | Pérdida de MFA/contraseña administrativa | Responsable técnico verifica al titular y usa el comando de recuperación abajo. |
@@ -91,7 +91,7 @@ En Railway, el servicio temporal operaciones puede seleccionar `/infra/railway.r
 
 Activa y verifica los respaldos de PostgreSQL en Railway **antes** de cargar datos reales; el repositorio no puede activar esa función en tu cuenta. Programa la frecuencia/retención según el objetivo de recuperación que acuerde el colegio. Conserva además una copia cifrada fuera del proyecto y una copia separada de `DNI_LOOKUP_KEY`, `SESSION_PEPPER` y `CSRF_KEY`. Sin las claves correctas no se recuperan búsquedas, documentos cifrados y MFA. No rotes `DNI_LOOKUP_KEY` ni `SESSION_PEPPER` durante una elección: requieren un procedimiento de migración de datos/secretos.
 
-Ensaya restauración en **otro PostgreSQL/proyecto**, usando el respaldo administrado del proveedor; nunca sobre la elección activa. Conecta una API aislada con las mismas claves y el dominio de ensayo, confirma migraciones, MFA, padrón, totales y conciliación. Desactiva las cabinas restauradas y revoca las sesiones antes de exponer esa copia. No mantengas dos instalaciones capaces de aceptar votos de la misma elección. Si se perdieron votos posteriores al respaldo, el comité debe resolver la contingencia documentada: restaurar una copia antigua no permite reconstruir esas preferencias.
+Ensaya restauración en **otro PostgreSQL/proyecto**, usando el respaldo administrado del proveedor; nunca sobre la elección activa. Conecta una API aislada con las mismas claves y el dominio de ensayo, confirma migraciones, MFA, padrón, totales y conciliación. Revoca las sesiones restauradas antes de exponer esa copia. No mantengas dos instalaciones capaces de aceptar votos de la misma elección. Si se perdieron votos posteriores al respaldo, el comité debe resolver la contingencia documentada: restaurar una copia antigua no permite reconstruir esas preferencias.
 
 La prueba local `npm run backup:verify` cifra un dump y restaura una base temporal del entorno de demostración; **no configura ni verifica tus respaldos de Railway**. El ensayo real con la red, equipos, responsables y alimentación del colegio, y la restauración en tu cuenta, siguen siendo requisitos de salida. Que las pruebas automáticas pasen no certifica por sí solo una elección oficial.
 

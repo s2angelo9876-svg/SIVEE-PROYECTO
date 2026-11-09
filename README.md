@@ -1,10 +1,10 @@
 # SIVEE · Votación presencial escolar
 
-La modalidad presencial usa DNI directo en cabinas activadas del colegio, sin aprobación de mesa por estudiante. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. El DNI comprueba elegibilidad; la supervisión presencial del colegio debe impedir suplantaciones en los equipos habilitados.
+La votación usa solamente DNI, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
 
 **Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
 
-**Desarrollo local:** `npm install` y `npm run dev` desde la raíz, con Docker Desktop iniciado. Para ensayar el nuevo flujo crea una nueva elección desde Configuración; usa Mesa y cabinas para activar los navegadores.
+**Desarrollo local:** `npm install` y `npm run dev` desde la raíz, con Docker Desktop iniciado. Para ensayar el nuevo flujo crea una elección desde Configuración, confirma el padrón y las listas, prepara la elección y abre el turno. Los estudiantes acceden a `/votar` e ingresan su DNI.
 
 React + Vite + TypeScript + Tailwind, Express, PostgreSQL 17, Prisma y eventos SSE. Incluye el entorno de ensayo del SDD del 5 de noviembre de 2026 y la nueva modalidad presencial.
 
@@ -123,4 +123,4 @@ En Linux/macOS: `npm run build` y `WEB_ORIGIN=http://localhost:5000 npm start`. 
 
 ## Alcance de la entrega
 
-Esta entrega implementa el flujo presencial con DNI y mesa, además de conservar las simulaciones del SDD. No constituye una certificación de seguridad, autorización normativa ni despliegue oficial. Requiere validación del Comité, TLS y prueba en infraestructura final antes de usar datos reales. No implementa anonimato criptográfico verificable ni garantiza RPO=0 frente a pérdida física del servidor. La puesta en servicio y los requisitos institucionales están en [PRODUCCION.md](docs/PRODUCCION.md); `docs/IMPLEMENTACION.md` conserva la trazabilidad de la entrega anterior.
+Esta entrega implementa el flujo de voto directo con DNI, además de conservar las simulaciones del SDD. No constituye una certificación de seguridad, autorización normativa ni despliegue oficial. Requiere validación del Comité, TLS y prueba en infraestructura final antes de usar datos reales. No implementa anonimato criptográfico verificable ni garantiza RPO=0 frente a pérdida física del servidor. La puesta en servicio y los requisitos institucionales están en [PRODUCCION.md](docs/PRODUCCION.md); `docs/IMPLEMENTACION.md` conserva la trazabilidad de la entrega anterior.

@@ -5,7 +5,6 @@ import PDFDocument from "pdfkit";
 import { validateListLogo } from "./list-logo.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
-import { deskAdmin } from "./desk.js";
 import { schoolRoster } from "./school-roster.js";
 import { issueSession, adminAuth, permit, cookieOptions } from "./auth.js";
 import {
@@ -99,7 +98,6 @@ admin.post(
   },
 );
 admin.use(adminAuth);
-admin.use(deskAdmin);
 admin.use(schoolRoster);
 admin.get("/me", (_req, res) => {
   const u = res.locals.admin;
@@ -277,7 +275,7 @@ admin.post("/elections", permit("elections:write"), async (req, res) => {
   const authMode = input.authMode || "DESK";
   requireState(
     config.SIVEE_ENV !== "production" || authMode === "DESK",
-    "Las elecciones oficiales requieren DNI y cabinas registradas.",
+    "Las elecciones oficiales requieren acceso con DNI.",
   );
   const e = await db.$transaction(async (tx) => {
     const e = await tx.election.create({
@@ -371,12 +369,6 @@ admin.post(
             },
           })) === 0,
           "Hay electores sin turno válido.",
-        );
-        requireState(
-          (await tx.booth.count({
-            where: { electionId: e.id, active: true, tokenHash: { not: null } },
-          })) > 0,
-          "Activa al menos una cabina de votación antes de preparar.",
         );
       }
       if (e.mode === "OFICIAL")

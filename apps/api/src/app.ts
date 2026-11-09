@@ -11,7 +11,6 @@ import { voter } from "./voter.js";
 import { admin } from "./admin.js";
 import { accountRoutes } from "./mfa.js";
 import { config } from "./config.js";
-import { boothApi } from "./desk.js";
 import { originGuard } from "./auth.js";
 import { AppError } from "./security.js";
 export const app = express();
@@ -128,7 +127,6 @@ app.get("/api/v1/elections/active/public", async (_req, res) => {
   });
 });
 app.use("/api/v1/voter", voter);
-app.use("/api/v1/booth", boothApi);
 admin.use(accountRoutes);
 app.use("/api/v1/admin", admin);
 app.use("/api", (_req, res) =>

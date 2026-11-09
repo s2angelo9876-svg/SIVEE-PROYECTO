@@ -9,7 +9,7 @@ import {
   Star,
   ArrowUpRight,
 } from "lucide-react";
-export const tokens = { admin: "", voter: "", booth: "" };
+export const tokens = { admin: "", voter: "" };
 export function readBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -32,7 +32,7 @@ export async function api<T = any>(
   options: {
     method?: string;
     body?: unknown;
-    kind?: "admin" | "voter" | "booth";
+    kind?: "admin" | "voter";
     headers?: Record<string, string>;
   } = {},
 ): Promise<T> {

@@ -216,12 +216,6 @@ export function AdminShell() {
   const can = (p: string) => user && hasPermission(user.grants, p, id);
   const nav = [
     {
-      to: "/admin/mesa",
-      label: "Mesa y cabinas",
-      icon: ShieldCheck,
-      p: "desk:verify",
-    },
-    {
       to: "/admin",
       label: "Vista general",
       icon: LayoutDashboard,
@@ -1652,6 +1646,7 @@ const auditLabels: Record<string, string> = {
   BOOTH_UPDATED: "Cabina desactivada o reasignada",
   IDENTITY_VERIFIED: "Identidad cotejada por la mesa",
   DNI_ADMISSION_CREATED: "Acceso iniciado con DNI en cabina",
+  DNI_SESSION_CREATED: "Acceso iniciado con DNI",
   ADMISSION_CANCELLED: "Acceso desde cabina cancelado",
   SCHOOL_ROSTER_STAGED: "Archivo escolar recibido para revisión",
   SCHOOL_ROSTER_CORRECTED: "Registro escolar corregido",

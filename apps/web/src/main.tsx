@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 import { Landing, VoterFlow } from "./Public";
 import {
   AdminLogin,
@@ -17,8 +17,6 @@ import {
   ActivateAccount,
 } from "./Admin";
 import { Roster } from "./Roster";
-import { Desk } from "./Desk";
-import { BoothPairing } from "./Booth";
 import { SiteProvider } from "./Site";
 import "./styles.css";
 class ErrorBoundary extends React.Component<
@@ -51,14 +49,20 @@ createRoot(document.getElementById("root")!).render(
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/votar" element={<VoterFlow />} />
-          <Route path="/cabina/activar" element={<BoothPairing />} />
+          <Route
+            path="/cabina/activar"
+            element={<Navigate to="/votar" replace />}
+          />
           <Route path="/activar-cuenta" element={<ActivateAccount />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<Dashboard />} />
             <Route path="jornada" element={<ElectionDay />} />
             <Route path="padron" element={<Roster />} />
-            <Route path="mesa" element={<Desk />} />
+            <Route
+              path="mesa"
+              element={<Navigate to="/admin/jornada" replace />}
+            />
             <Route path="listas" element={<Lists />} />
             <Route path="resultados" element={<Results />} />
             <Route path="configuracion" element={<Settings />} />

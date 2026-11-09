@@ -2,7 +2,11 @@ import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { db } from "./db.js";
 import { config } from "./config.js";
-import { voterLoginSchema, uuid } from "../../../packages/shared/domain.js";
+import {
+  voterLoginSchema,
+  voterDniLoginSchema,
+  uuid,
+} from "../../../packages/shared/domain.js";
 import {
   AppError,
   dniLookup,
@@ -10,7 +14,7 @@ import {
   verifyPassword,
 } from "./security.js";
 import { issueSession, voterAuth, cookieOptions } from "./auth.js";
-import { castVote, windowAvailable, lockElection } from "./services.js";
+import { castVote, windowAvailable, lockElection, audit } from "./services.js";
 export const voter = Router();
 const dummyHash = await passwordHash("not-a-valid-credential");
 const authLimit = rateLimit({
@@ -26,6 +30,77 @@ const authLimit = rateLimit({
         requestId: res.locals.requestId,
       },
     }),
+});
+voter.post("/dni-sessions", authLimit, async (req, res) => {
+  const { electionId, dni } = voterDniLoginSchema.parse(req.body);
+  const data = await db.$transaction(async (tx) => {
+    const e = await lockElection(tx, electionId, true);
+    if (e.authMode !== "DESK")
+      throw new AppError(
+        403,
+        "AUTH_FAILED",
+        "Esta simulación utiliza documento y código de acceso.",
+      );
+    const student = await tx.student.findUnique({
+      where: {
+        institutionId_dniLookup: {
+          institutionId: e.institutionId,
+          dniLookup: dniLookup(dni),
+        },
+      },
+    });
+    const p =
+      student &&
+      (await tx.participation.findUnique({
+        where: { electionId_studentId: { electionId, studentId: student.id } },
+      }));
+    if (!student?.active || p?.state !== "PENDIENTE")
+      throw new AppError(
+        403,
+        "AUTH_FAILED",
+        "El DNI no está habilitado o ya registró su voto. Consulta al comité si necesitas ayuda.",
+      );
+    if (
+      !windowAvailable(
+        e,
+        e.windows.find((w) => w.shift === p.shift),
+      )
+    )
+      throw new AppError(
+        409,
+        "VOTING_WINDOW_CLOSED",
+        "La votación no está abierta para tu turno.",
+      );
+    await tx.voterSession.updateMany({
+      where: {
+        electionId,
+        studentId: student.id,
+        revoked: false,
+        consumed: false,
+      },
+      data: { revoked: true },
+    });
+    const session = await issueSession(
+      res,
+      "voter",
+      { electionId, studentId: student.id },
+      tx,
+    );
+    await audit(tx, null, electionId, "DNI_SESSION_CREATED", {
+      studentId: student.id,
+    });
+    return {
+      ...session,
+      electionId,
+      student: {
+        displayName: p.displayName,
+        grade: p.grade,
+        section: p.section,
+        shift: p.shift,
+      },
+    };
+  });
+  res.json({ data });
 });
 voter.post("/sessions", authLimit, async (req, res) => {
   const parsed = voterLoginSchema.safeParse(req.body);
@@ -43,8 +118,8 @@ voter.post("/sessions", authLimit, async (req, res) => {
   if (e && (e.authMode === "DESK" || e.mode === "OFICIAL"))
     throw new AppError(
       403,
-      "DESK_REQUIRED",
-      "Ingresa tu DNI desde una cabina activada por el comité.",
+      "DNI_REQUIRED",
+      "Ingresa solamente tu DNI para esta elección.",
     );
   const student = e
     ? await db.student.findUnique({
@@ -252,11 +327,7 @@ voter.post("/votes", async (req, res) => {
       "INVALID_PAYLOAD",
       "Falta el identificador del intento.",
     );
-  const result = await castVote(
-    res.locals.voter.id,
-    req.body,
-    req.cookies.sivee_booth,
-  );
+  const result = await castVote(res.locals.voter.id, req.body);
   res.status(result.status === "RECORDED" ? 201 : 200).json({
     data: {
       ...result,
@@ -272,16 +343,6 @@ voter.post("/logout", async (_req, res) => {
       where: { id: session.id },
       data: { revoked: true },
     });
-    if (session.admissionId) {
-      await tx.admission.updateMany({
-        where: { id: session.admissionId, state: "APPROVED" },
-        data: { state: "CANCELLED" },
-      });
-      await tx.voterSession.updateMany({
-        where: { admissionId: session.admissionId },
-        data: { revoked: true },
-      });
-    }
   });
   res.clearCookie("sivee_voter", cookieOptions);
   res.json({ data: { ok: true } });

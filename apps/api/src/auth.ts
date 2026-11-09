@@ -11,7 +11,6 @@ import {
 } from "./security.js";
 import { hasPermission } from "../../../packages/shared/domain.js";
 import { audit, type Tx } from "./services.js";
-import { assertAdmission } from "./desk-security.js";
 export const cookieOptions = {
   httpOnly: true,
   secure: config.COOKIE_SECURE === "true",
@@ -77,20 +76,23 @@ export async function voterAuth(
     throw new AppError(401, "UNAUTHENTICATED", "Identifícate para continuar.");
   const session = await db.voterSession.findUnique({
     where: { tokenHash: hashSecret(token) },
-    include: { student: true },
+    include: { student: true, election: true },
   });
-  if (!session || session.revoked || +session.expiresAt < Date.now())
+  if (
+    !session ||
+    session.revoked ||
+    session.admissionId ||
+    +session.expiresAt < Date.now()
+  )
     throw new AppError(
       401,
       "UNAUTHENTICATED",
       "Tu sesión ha vencido. Vuelve a identificarte.",
     );
   csrf(req, token);
-  if (session.admissionId)
-    await assertAdmission(db, session, req.cookies.sivee_booth);
   res.locals.voter = session;
   res.locals.csrfToken = csrfFor(token);
-  if (!session.consumed && !session.admissionId)
+  if (!session.consumed && session.election.authMode === "CODE")
     await db.voterSession.update({
       where: { id: session.id },
       data: { expiresAt: new Date(Date.now() + 300000) },

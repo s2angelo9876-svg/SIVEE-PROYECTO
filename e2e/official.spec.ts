@@ -66,7 +66,7 @@ test.afterAll(async () => {
   if (created) await owner.query(`DROP DATABASE "${database}" WITH (FORCE)`);
   if (owner) await owner.end();
 });
-test("Padrón escolar y voto directo con DNI en una cabina registrada, sin aprobación de mesa", async ({
+test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas ni responsables", async ({
   page,
   browser,
 }) => {
@@ -273,19 +273,11 @@ test("Padrón escolar y voto directo con DNI en una cabina registrada, sin aprob
     proposal: "Propuesta de ensayo",
     active: true,
   });
-  await page.getByRole("link", { name: "Mesa y cabinas", exact: true }).click();
-  await page.getByLabel("Nombre de la nueva cabina").fill("Cabina aula 1");
-  await page.getByLabel("Responsable de mesa").selectOption(me.id);
-  await page
-    .getByRole("button", { name: "Registrar cabina", exact: true })
-    .click();
-  await page.getByRole("button", { name: "Activar en un equipo" }).click();
-  await page
-    .getByLabel("Motivo o comprobación realizada")
-    .fill("Equipo del colegio revisado por el comité");
-  await page.getByRole("button", { name: "Confirmar", exact: true }).click();
-  const link = page.getByLabel("Enlace privado de activación");
-  await expect(link).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Mesa y cabinas", exact: true }),
+  ).toHaveCount(0);
+  await page.goto("/admin/mesa");
+  await expect(page).toHaveURL(/\/admin\/jornada$/);
   const cabina = await browser.newContext({
     baseURL: origin,
     viewport: { width: 1280, height: 720 },
@@ -293,13 +285,20 @@ test("Padrón escolar y voto directo con DNI en una cabina registrada, sin aprob
   const voter = await cabina.newPage();
   voter.on("pageerror", (e) => errors.push(e.message));
   try {
-    await voter.goto(await link.inputValue());
-    await page.getByRole("button", { name: "Ocultar enlace" }).click();
-    await expect(voter).toHaveURL(/\/cabina\/activar$/);
-    await voter.getByRole("button", { name: "Activar este equipo" }).click();
+    await voter.goto("/votar");
     await expect(
       voter.getByRole("heading", { name: "Identifícate con tu DNI" }),
     ).toBeVisible();
+    expect((await cabina.cookies()).some((c) => c.name === "sivee_booth")).toBe(
+      false,
+    );
+    await voter
+      .getByLabel("Documento de identidad", { exact: true })
+      .fill("10000000");
+    await voter.getByRole("button", { name: "Continuar con mi DNI" }).click();
+    await expect(voter.getByRole("alert")).toContainText(
+      "La votación no está abierta para tu turno.",
+    );
     await api(root + "/prepare", {});
     await api(root + "/windows/MANANA/open", {
       reason: "Inicio del ensayo presencial",
@@ -332,9 +331,11 @@ test("Padrón escolar y voto directo con DNI en una cabina registrada, sin aprob
     await expect(
       voter.getByRole("heading", { name: /Gracias por/ }),
     ).toBeVisible();
-    await expect(page.getByText("No hay sesiones vigentes.")).toBeVisible();
+    expect((await cabina.cookies()).some((c) => c.name === "sivee_booth")).toBe(
+      false,
+    );
     await page.screenshot({
-      path: "artifacts/official-desk.png",
+      path: "artifacts/official-election-day.png",
       fullPage: true,
     });
     await voter.screenshot({
