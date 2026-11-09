@@ -1,6 +1,6 @@
 # SIVEE presencial: instalación y jornada oficial
 
-El alumno ingresa solamente su DNI en una cabina activada. La mesa coteja presencialmente persona y documento, vuelve a escribir el DNI y habilita esa cabina durante cinco minutos. No se emiten códigos individuales. Conocer un DNI no permite votar desde un navegador cualquiera. El control depende de que la mesa realmente compruebe la identidad y de que los equipos estén supervisados; no es una prueba biométrica ni una garantía contra un operador deshonesto.
+El alumno ingresa solamente su DNI en una cabina activada y accede directamente a la cédula, sin aprobación de mesa ni códigos individuales. El comité registra y activa cada navegador del colegio una vez. Conocer un DNI no permite votar desde un navegador sin activar, pero sí podría permitir suplantar al estudiante desde una cabina habilitada. El acceso con DNI comprueba elegibilidad, no identidad; el colegio debe supervisar físicamente el uso de sus equipos.
 
 ## Desplegar en Railway
 
@@ -57,19 +57,20 @@ Este cambio utiliza el campo existente de símbolo y no requiere migración de b
 
 ## Equipos, mesa y votación
 
-- Crea las cabinas desde Mesa y cabinas y asigna cada una a una cuenta de mesa. El comité puede supervisar todas; la mesa solo autoriza sus cabinas.
+- Crea las cabinas desde Mesa y cabinas y asigna cada una a una cuenta de mesa. El comité puede supervisar todas; la mesa puede cancelar sesiones en sus cabinas. No aprueba cada votante.
 - Genera el enlace de activación y ábrelo **solo en el navegador del equipo del colegio**. Dura diez minutos y funciona una vez. No lo entregues al alumno ni lo publiques. El fragmento se borra de la barra de direcciones. La sesión de cabina usa una cookie protegida; no acredita hardware físico, por lo que se requiere navegador/perfil supervisado, sin extensiones no autorizadas, sincronización ni acceso del alumno a herramientas de desarrollo. La cookie vence a las 24 horas; reactiva antes de otra jornada.
 - Configura la estación de mesa separada de las cabinas; los alumnos no deben tener la sesión administrativa en su equipo. Usa modo kiosco y supervisión del colegio. Desactiva o reasigna una cabina ante pérdida o sospecha: se revocan su navegador y autorizaciones. Reactivar en otro navegador revoca el anterior.
 - Activa al menos una cabina, prepara la elección y abre manualmente el turno correspondiente. Mañana debe cerrarse antes de abrir tarde. Los horarios también limitan la votación.
-- El alumno escribe DNI; la pantalla no muestra su identidad antes de la verificación. El responsable coteja documento, persona, nombre, grado y sección en la mesa, introduce el DNI cotejado y confirma presencialmente. No uses fecha de nacimiento, lista pública ni memoria del DNI como prueba de identidad. Un documento sin fotografía necesita el procedimiento presencial adicional que apruebe el colegio.
-- La autorización dura cinco minutos y sirve solo para ese alumno, elección y cabina. Cancelar, expirar, desactivar o cambiar el navegador impide reutilizar la autorización. Un estudiante no puede mantener autorizaciones simultáneas en dos cabinas.
+- El alumno escribe su propio DNI. Si está habilitado, no ha votado y su turno está abierto, la cédula se abre automáticamente y permite revisar sus datos. El responsable no vuelve a escribir el DNI ni pulsa una aprobación. Esta modalidad elimina la comprobación de identidad por software; la supervisión presencial debe impedir que se utilicen documentos ajenos.
+- La sesión dura cinco minutos desde el ingreso del DNI y sirve solo para ese alumno, elección y cabina. Cancelar, expirar, desactivar o cambiar el navegador impide reutilizarla. Un estudiante no puede mantener sesiones simultáneas en dos cabinas.
+- Al actualizar, una solicitud pendiente `WAITING` del flujo anterior se cancela desde la cabina y se vuelve a ingresar el DNI; no requiere migrar la base ni ejecutar operaciones.
 - El alumno revisa sus datos y emite su voto privado. Un doble envío produce una sola participación/papeleta. La constancia no revela la elección; la mesa no recibe la preferencia. Tras votar se limpia la sesión del alumno. Para el siguiente alumno vuelve al inicio.
 
 ## Incidentes y recuperación
 
 | Caso | Procedimiento |
 | --- | --- |
-| DNI ajeno, datos discrepantes o sospecha de suplantación | No aprobar; cancelar, registrar incidencia y aplicar la comprobación presencial institucional. Nunca colocar el DNI completo o la preferencia en el motivo. |
+| DNI ajeno, datos discrepantes o sospecha de suplantación | Cancelar la sesión antes del voto, registrar incidencia y aplicar la comprobación presencial institucional. Si ya votó, escalar al comité sin borrar ni reasignar su papeleta. Nunca colocar el DNI completo o la preferencia en el motivo. |
 | Alumno omitido antes de preparar | Alta individual, revisión del documento/turno y confirmación. |
 | Omisión después de preparar o jornada abierta | No hay alta tardía automática. Registrar incidencia y elevar al comité conforme al reglamento; no editar SQL ni abrir otra elección para eludir controles. |
 | El sistema dice que ya participó | Comprobar participación e incidencia. No permitir un segundo voto ni borrar papeletas. La app no puede atribuir una papeleta secreta a una persona. |

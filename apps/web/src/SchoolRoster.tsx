@@ -105,7 +105,7 @@ function SchoolRosterScreen() {
     <>
       <PageTitle
         title="Padrón del colegio"
-        description="Revisa documentos, matrículas y turnos antes de habilitar la elección. El estudiante votará con DNI y verificación de mesa."
+        description="Revisa documentos, matrículas y turnos antes de habilitar la elección. El estudiante votará con su DNI en una cabina registrada."
         action={
           editable && (
             <button

@@ -437,17 +437,6 @@ try {
     },
   );
   let admission: any, voter: Session;
-  const approve = (requestId: string, document: string, s = committee) =>
-    call(
-      `/desk/requests/${requestId}/approve`,
-      {
-        identityVerified: true,
-        document,
-        reason: "Identidad cotejada presencialmente con documento",
-      },
-      "POST",
-      s,
-    );
   const claim = async (session: Session, requestId: string) => {
     const r = await req("/booth/claim", "POST", { requestId }, session);
     const data = success(r);
@@ -460,20 +449,42 @@ try {
     };
   };
   await check(
-    "DNI no autoriza: mesa asignada, verificación de documento y sesión ligada a cabina",
+    "DNI abre sesión sin aprobación de mesa, solo en cabina registrada y sin afirmar identidad verificada",
     async () => {
       admission = success(
         await req("/booth/requests", "POST", { dni: "10000030" }, b),
       );
       assert.deepEqual(Object.keys(admission).sort(), ["id", "state"]);
+      assert.equal(admission.state, "APPROVED");
       assert.equal(
-        (await req("/booth/claim", "POST", { requestId: admission.id }, b))
-          .status,
-        409,
+        (await db.admission.findUniqueOrThrow({ where: { id: admission.id } }))
+          .approvedBy,
+        null,
       );
-      assert.equal((await approve(admission.id, "10000030", mesa)).status, 403);
-      assert.equal((await approve(admission.id, "10000031")).status, 409);
-      success(await approve(admission.id, "10000030"));
+      const event = await db.audit.findFirstOrThrow({
+        where: { electionId: e.id, action: "DNI_ADMISSION_CREATED" },
+      });
+      assert.equal(event.adminId, null);
+      assert.ok(!JSON.stringify(event.detail).includes("10000030"));
+      assert.equal(
+        await db.audit.count({
+          where: { electionId: e.id, action: "IDENTITY_VERIFIED" },
+        }),
+        0,
+      );
+      assert.equal(
+        (
+          await call(
+            `/desk/requests/${admission.id}/cancel`,
+            {
+              reason: "Intento de otra mesa sobre esta cabina",
+            },
+            "POST",
+            mesa,
+          )
+        ).status,
+        403,
+      );
       assert.equal(
         (await req("/booth/claim", "POST", { requestId: admission.id }, b2))
           .status,
@@ -503,6 +514,38 @@ try {
     },
   );
   await check(
+    "Solicitud antigua se cancela y permite DNI directo; documentos inválidos no abren sesión",
+    async () => {
+      assert.equal(
+        (await req("/booth/requests", "POST", { dni: "bad" }, b2)).status,
+        400,
+      );
+      assert.equal(
+        (await req("/booth/requests", "POST", { dni: "19999999" }, b2)).status,
+        403,
+      );
+      const legacy = success(
+        await req("/booth/requests", "POST", { dni: "10000034" }, b2),
+      );
+      await db.admission.update({
+        where: { id: legacy.id },
+        data: { state: "WAITING" },
+      });
+      assert.equal(
+        (await req("/booth/claim", "POST", { requestId: legacy.id }, b2))
+          .status,
+        409,
+      );
+      success(await req("/booth/cancel", "POST", { requestId: legacy.id }, b2));
+      const direct = success(
+        await req("/booth/requests", "POST", { dni: "10000034" }, b2),
+      );
+      assert.equal(direct.state, "APPROVED");
+      await claim(b2, direct.id);
+      success(await req("/booth/cancel", "POST", { requestId: direct.id }, b2));
+    },
+  );
+  await check(
     "Pausa bloquea voto; doble envío concurrente produce una sola papeleta y participación",
     async () => {
       success(
@@ -518,6 +561,10 @@ try {
           voter,
         );
       assert.equal((await vote()).status, 409);
+      assert.equal(
+        (await req("/booth/requests", "POST", { dni: "10000034" }, b2)).status,
+        403,
+      );
       success(
         await call("/windows/MANANA/open", {
           reason: "Reanudación del ensayo",
@@ -554,7 +601,6 @@ try {
       const index = responses.findIndex((r) => r.status === 201),
         session = [b, b2][index],
         r = success(responses[index]);
-      success(await approve(r.id, "10000031"));
       const v = await claim(session, r.id);
       success(
         await call(`/desk/requests/${r.id}/cancel`, {
@@ -576,12 +622,11 @@ try {
     },
   );
   await check(
-    "Revincular navegador invalida autorizaciones y expirar obliga nueva verificación",
+    "Revincular navegador invalida sesiones y expirar exige volver a ingresar DNI",
     async () => {
       const r = success(
         await req("/booth/requests", "POST", { dni: "10000032" }, b),
       );
-      success(await approve(r.id, "10000032"));
       const v = await claim(b, r.id),
         oldBooth = b;
       b = await pair(booth.id);
@@ -603,7 +648,6 @@ try {
       const expired = success(
         await req("/booth/requests", "POST", { dni: "10000033" }, b),
       );
-      success(await approve(expired.id, "10000033"));
       const ev = await claim(b, expired.id);
       await db.admission.update({
         where: { id: expired.id },
@@ -613,7 +657,7 @@ try {
       assert.equal(
         success(await req("/booth/requests", "POST", { dni: "10000033" }, b))
           .state,
-        "WAITING",
+        "APPROVED",
       );
     },
   );
@@ -623,7 +667,6 @@ try {
       const r = success(
         await req("/booth/requests", "POST", { dni: "10000035" }, b2),
       );
-      success(await approve(r.id, "10000035"));
       const v = await claim(b2, r.id);
       const gate = new pg.Client({ connectionString: ownerUrl.toString() });
       await gate.connect();
@@ -672,7 +715,6 @@ try {
       const r = success(
         await req("/booth/requests", "POST", { dni: "10000036" }, b2),
       );
-      success(await approve(r.id, "10000036"));
       const v = await claim(b2, r.id);
       success(await req("/voter/logout", "POST", {}, v));
       assert.equal(
@@ -682,7 +724,7 @@ try {
       assert.equal(
         success(await req("/booth/requests", "POST", { dni: "10000037" }, b2))
           .state,
-        "WAITING",
+        "APPROVED",
       );
     },
   );

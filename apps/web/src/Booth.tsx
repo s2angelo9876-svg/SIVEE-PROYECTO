@@ -61,6 +61,7 @@ export function BoothIdentity({
     [busy, setBusy] = useState(false),
     [dni, setDni] = useState("");
   const onSuccess = useRef(onAuthenticated);
+  const refresh = useRef<(() => Promise<void>) | null>(null);
   onSuccess.current = onAuthenticated;
   useEffect(() => {
     let ended = false,
@@ -96,10 +97,12 @@ export function BoothIdentity({
         inflight = false;
       }
     };
+    refresh.current = poll;
     void poll();
     const t = setInterval(() => void poll(), 2000);
     return () => {
       ended = true;
+      refresh.current = null;
       clearInterval(t);
     };
   }, [electionId]);
@@ -109,7 +112,9 @@ export function BoothIdentity({
     <section className="panel centered-panel">
       <h1>
         {waiting
-          ? "La mesa verificará tu identidad"
+          ? status.request.state === "APPROVED"
+            ? "Abriendo tu cédula"
+            : "Reinicia tu identificación"
           : "Identifícate con tu DNI"}
       </h1>
       {status && <p>{status.name}</p>}
@@ -117,8 +122,9 @@ export function BoothIdentity({
       {waiting ? (
         <>
           <p>
-            Acércate al responsable con tu documento. La cédula se abrirá aquí
-            cuando autorice tu participación.
+            {status.request.state === "APPROVED"
+              ? "Tu DNI está habilitado. La cédula se abrirá automáticamente."
+              : "Esta solicitud quedó pendiente. Cancélala y vuelve a ingresar tu DNI para continuar."}
           </p>
           <button
             className="button secondary"
@@ -157,6 +163,7 @@ export function BoothIdentity({
               });
               setStatus({ ...status, request });
               setDni("");
+              await refresh.current?.();
             } catch (e: any) {
               setError(e.message);
             } finally {
@@ -165,7 +172,8 @@ export function BoothIdentity({
           }}
         >
           <p>
-            La mesa comprobará que eres tú. No necesitas un código de acceso.
+            Ingresa tu propio DNI para abrir la cédula. No necesitas códigos ni
+            aprobación de mesa.
           </p>
           {status?.request?.state === "CONSUMED" && (
             <Notice success>
@@ -198,7 +206,7 @@ export function BoothIdentity({
               status.electionId !== electionId
             }
           >
-            Solicitar verificación de mesa
+            Continuar con mi DNI
           </button>
         </form>
       )}

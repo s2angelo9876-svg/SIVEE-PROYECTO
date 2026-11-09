@@ -23,9 +23,7 @@ function DeskScreen() {
     [staff, setStaff] = useState(""),
     [link, setLink] = useState("");
   const [action, setAction] = useState<any>(),
-    [reason, setReason] = useState(""),
-    [verified, setVerified] = useState(false),
-    [document, setDocument] = useState("");
+    [reason, setReason] = useState("");
   const load = async () => setData(await api(root));
   useEffect(() => {
     if (!id || election?.authMode !== "DESK") return;
@@ -67,7 +65,7 @@ function DeskScreen() {
     return (
       <Notice>
         Esta elección utiliza el recorrido anterior de simulación. Crea una
-        nueva elección para usar cabinas y verificación presencial.
+        nueva elección para votar con DNI en cabinas registradas.
       </Notice>
     );
   const active = ["BORRADOR", "PREPARADA", "EN_CURSO", "PAUSADA"].includes(
@@ -76,19 +74,17 @@ function DeskScreen() {
   function open(a: any) {
     setAction(a);
     setReason("");
-    setVerified(false);
-    setDocument("");
   }
   return (
     <>
       <PageTitle
         title="Mesa y cabinas"
-        description="Comprueba presencialmente la identidad y autoriza únicamente la cabina donde está el estudiante."
+        description="Activa las laptops del colegio una sola vez. Los estudiantes ingresan su DNI y votan sin aprobación de mesa."
       />
       {error && <Notice>{error}</Notice>}
       <section className="panel">
-        <h2>Solicitudes de verificación</h2>
-        {!data?.requests.length && <p>No hay solicitudes pendientes.</p>}
+        <h2>Sesiones en cabinas</h2>
+        {!data?.requests.length && <p>No hay sesiones vigentes.</p>}
         <div className="desk-requests">
           {data?.requests.map((r: any) => (
             <article className="desk-request" key={r.id}>
@@ -102,26 +98,17 @@ function DeskScreen() {
               </p>
               <p>
                 {r.state === "WAITING"
-                  ? "Espera verificación presencial"
-                  : "Autorizado; esperando el voto"}{" "}
+                  ? "Solicitud del flujo anterior; cancela para reingresar el DNI"
+                  : "Sesión iniciada con DNI; esperando el voto"}{" "}
                 · vence {dateFormat(r.expiresAt)}
               </p>
               <div className="roster-actions">
-                {r.state === "WAITING" && (
-                  <button
-                    className="button"
-                    disabled={busy || !active}
-                    onClick={() => open({ kind: "approve", request: r })}
-                  >
-                    Verificar identidad
-                  </button>
-                )}
                 <button
                   className="button secondary"
                   disabled={busy}
                   onClick={() => open({ kind: "cancel", request: r })}
                 >
-                  Cancelar autorización
+                  Cancelar sesión
                 </button>
               </div>
             </article>
@@ -252,11 +239,7 @@ function DeskScreen() {
       )}
       {action && (
         <Modal
-          title={
-            action.kind === "approve"
-              ? "Verificar identidad presencial"
-              : "Confirmar operación de mesa"
-          }
+          title="Confirmar operación de mesa"
           onClose={() => !busy && setAction(undefined)}
         >
           <form
@@ -268,11 +251,7 @@ function DeskScreen() {
                     root + `/requests/${action.request.id}/${action.kind}`,
                     {
                       method: "POST",
-                      body: {
-                        reason,
-                        identityVerified: verified,
-                        ...(action.kind === "approve" ? { document } : {}),
-                      },
+                      body: { reason },
                     },
                   );
                 else if (action.kind === "pairing") {
@@ -294,45 +273,11 @@ function DeskScreen() {
               });
             }}
           >
-            {action.kind === "approve" && (
-              <>
-                <p>
-                  <strong>{action.request.student?.displayName}</strong> ·{" "}
-                  {
-                    data.booths.find(
-                      (b: any) => b.id === action.request.boothId,
-                    )?.name
-                  }
-                </p>
-                <Field label="DNI cotejado en el documento">
-                  <input
-                    inputMode="numeric"
-                    pattern="[0-9]{8}"
-                    maxLength={8}
-                    value={document}
-                    onChange={(e) =>
-                      setDocument(e.target.value.replace(/\D/g, ""))
-                    }
-                    required
-                  />
-                </Field>
-                <label className="roster-check">
-                  <input
-                    type="checkbox"
-                    checked={verified}
-                    onChange={(e) => setVerified(e.target.checked)}
-                    required
-                  />
-                  He comprobado presencialmente que el documento y la persona
-                  corresponden a este estudiante.
-                </label>
-              </>
-            )}
             {action.kind === "update" && (
               <>
                 <p>
-                  Se cerrarán las autorizaciones vigentes. El equipo requerirá
-                  una nueva activación.
+                  Se cerrarán las sesiones vigentes. El equipo requerirá una
+                  nueva activación.
                 </p>
                 <Field label="Responsable asignado">
                   <select
@@ -375,11 +320,7 @@ function DeskScreen() {
             </p>
             <button
               className="button"
-              disabled={
-                busy ||
-                reason.trim().length < 10 ||
-                (action.kind === "approve" && !verified)
-              }
+              disabled={busy || reason.trim().length < 10}
             >
               Confirmar
             </button>

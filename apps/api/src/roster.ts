@@ -384,7 +384,7 @@ export async function reissueCodes(
   const allowed = (e: typeof election, rows: typeof initial) => {
     requireState(
       e.authMode === "CODE",
-      "Esta elección utiliza autorización presencial de mesa.",
+      "Esta elección utiliza DNI en cabinas registradas, sin códigos individuales.",
     );
     requireState(
       ["BORRADOR", "PREPARADA", "EN_CURSO", "PAUSADA"].includes(e.state),

@@ -277,7 +277,7 @@ admin.post("/elections", permit("elections:write"), async (req, res) => {
   const authMode = input.authMode || "DESK";
   requireState(
     config.SIVEE_ENV !== "production" || authMode === "DESK",
-    "Las elecciones oficiales requieren verificación de mesa.",
+    "Las elecciones oficiales requieren DNI y cabinas registradas.",
   );
   const e = await db.$transaction(async (tx) => {
     const e = await tx.election.create({

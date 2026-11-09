@@ -1,6 +1,6 @@
 # SIVEE · Votación presencial escolar
 
-La nueva modalidad usa DNI en cabinas activadas y verificación presencial de mesa. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco.
+La modalidad presencial usa DNI directo en cabinas activadas del colegio, sin aprobación de mesa por estudiante. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. El DNI comprueba elegibilidad; la supervisión presencial del colegio debe impedir suplantaciones en los equipos habilitados.
 
 **Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
 

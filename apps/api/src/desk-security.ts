@@ -14,7 +14,7 @@ export async function assertAdmission(
     throw new AppError(
       403,
       "DESK_REQUIRED",
-      "La mesa debe autorizar esta cabina.",
+      "Ingresa tu DNI desde una cabina activada por el comité.",
     );
   const admission = await tx.admission.findUnique({
     where: { id: session.admissionId },
@@ -36,7 +36,7 @@ export async function assertAdmission(
     throw new AppError(
       401,
       "ADMISSION_EXPIRED",
-      "La autorización terminó. Solicita ayuda a la mesa.",
+      "La sesión terminó. Vuelve a ingresar tu DNI en la cabina.",
     );
   return admission;
 }

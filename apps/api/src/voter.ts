@@ -44,7 +44,7 @@ voter.post("/sessions", authLimit, async (req, res) => {
     throw new AppError(
       403,
       "DESK_REQUIRED",
-      "Utiliza una cabina autorizada y solicita la verificación de la mesa.",
+      "Ingresa tu DNI desde una cabina activada por el comité.",
     );
   const student = e
     ? await db.student.findUnique({

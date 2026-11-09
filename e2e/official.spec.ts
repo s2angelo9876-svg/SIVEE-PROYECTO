@@ -66,7 +66,7 @@ test.afterAll(async () => {
   if (created) await owner.query(`DROP DATABASE "${database}" WITH (FORCE)`);
   if (owner) await owner.end();
 });
-test("Padrón escolar y voto presencial en dos navegadores con verificación de mesa", async ({
+test("Padrón escolar y voto directo con DNI en una cabina registrada, sin aprobación de mesa", async ({
   page,
   browser,
 }) => {
@@ -307,27 +307,13 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
     await voter
       .getByLabel("Documento de identidad", { exact: true })
       .fill("10000000");
-    await voter
-      .getByRole("button", { name: "Solicitar verificación de mesa" })
-      .click();
-    await expect(
-      voter.getByRole("heading", { name: "La mesa verificará tu identidad" }),
-    ).toBeVisible();
-    await expect(
-      voter.getByText("Estudiante Sintético 0", { exact: true }),
-    ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Verificar identidad", exact: true })
-      .click();
-    await page.getByLabel("DNI cotejado en el documento").fill("10000000");
-    await page.getByLabel(/He comprobado presencialmente/).check();
-    await page
-      .getByLabel("Motivo o comprobación realizada")
-      .fill("Estudiante presente, documento y datos coincidentes");
-    await page.getByRole("button", { name: "Confirmar", exact: true }).click();
+    await voter.getByRole("button", { name: "Continuar con mi DNI" }).click();
     await expect(
       voter.getByRole("heading", { name: "¿Estos son tus datos?" }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Verificar identidad", exact: true }),
+    ).toHaveCount(0);
     await voter.getByRole("button", { name: "Sí, soy yo" }).click();
     await expect(
       voter.getByRole("heading", { name: "Una opción. Tu decisión." }),
@@ -346,9 +332,7 @@ test("Padrón escolar y voto presencial en dos navegadores con verificación de 
     await expect(
       voter.getByRole("heading", { name: /Gracias por/ }),
     ).toBeVisible();
-    await expect(
-      page.getByText("No hay solicitudes pendientes."),
-    ).toBeVisible();
+    await expect(page.getByText("No hay sesiones vigentes.")).toBeVisible();
     await page.screenshot({
       path: "artifacts/official-desk.png",
       fullPage: true,

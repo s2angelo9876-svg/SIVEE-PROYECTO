@@ -225,7 +225,7 @@ export function Landing() {
           <p>
             {e?.authMode === "CODE"
               ? "Ten a mano tu documento y código de simulación."
-              : "Ten a mano tu DNI. La mesa verificará tu identidad antes de abrir la cédula."}
+              : "Ten a mano tu DNI. Puedes votar directamente en una cabina registrada del colegio."}
           </p>
         </section>
         <section className="landing-steps">
@@ -237,7 +237,7 @@ export function Landing() {
               desc:
                 e?.authMode === "CODE"
                   ? "Ingresa tu documento y el código de simulación."
-                  : "Ingresa tu DNI en una cabina y espera la verificación presencial de la mesa.",
+                  : "Ingresa tu propio DNI en una cabina registrada para abrir la cédula.",
             },
             {
               n: "02",
@@ -325,9 +325,7 @@ export function VoterFlow() {
       if (left <= 0) {
         void clearSession();
         setStep(0);
-        setError(
-          "La sesión terminó. Solicita una nueva verificación a la mesa.",
-        );
+        setError("La sesión terminó. Vuelve a ingresar tu DNI para continuar.");
       }
     }, 1000);
     return () => {

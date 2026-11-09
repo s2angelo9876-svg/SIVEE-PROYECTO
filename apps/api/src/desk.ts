@@ -245,18 +245,13 @@ deskAdmin.patch(
   },
 );
 deskAdmin.post(
-  root + "/requests/:requestId/:action",
+  root + "/requests/:requestId/cancel",
   permit("desk:verify"),
   async (req, res) => {
-    const action = z.enum(["approve", "cancel"]).parse(req.params.action);
-    const { reason, identityVerified, document } = z
+    const { reason } = z
       .object({
         reason: reasonSchema,
-        identityVerified: z.boolean(),
-        document: z
-          .string()
-          .regex(/^\d{8}$/)
-          .optional(),
+        identityVerified: z.literal(false).optional(),
       })
       .strict()
       .parse(req.body);
@@ -273,55 +268,20 @@ deskAdmin.post(
       const b = await tx.booth.findUniqueOrThrow({ where: { id: r!.boothId } });
       deskScope(res.locals.admin, b);
       requireState(b.active && !!b.tokenHash, "La cabina fue desactivada.");
-      if (action === "approve") {
-        requireState(
-          identityVerified && r!.state === "WAITING",
-          "Comprueba presencialmente la identidad antes de autorizar.",
-        );
-        const p = await tx.participation.findUniqueOrThrow({
-          where: {
-            electionId_studentId: { electionId: e.id, studentId: r!.studentId },
-          },
-          include: { student: true },
-        });
-        requireState(
-          !!document && p.student.dniLookup === dniLookup(document),
-          "El DNI cotejado no corresponde a esta solicitud.",
-        );
-        requireState(
-          p.state === "PENDIENTE" &&
-            p.student.active &&
-            windowAvailable(
-              e,
-              e.windows.find((w) => w.shift === p.shift),
-            ),
-          "El estudiante no puede votar en este momento.",
-        );
-        await tx.admission.update({
-          where: { id: r!.id },
-          data: {
-            state: "APPROVED",
-            approvedBy: res.locals.admin.id,
-            expiresAt: new Date(Date.now() + 300000),
-          },
-        });
-      } else {
-        await tx.admission.update({
-          where: { id: r!.id },
-          data: { state: "CANCELLED" },
-        });
-        await tx.voterSession.updateMany({
-          where: { admissionId: r!.id },
-          data: { revoked: true },
-        });
-      }
-      await audit(
-        tx,
-        res.locals.admin.id,
-        e.id,
-        action === "approve" ? "IDENTITY_VERIFIED" : "ADMISSION_CANCELLED",
-        { admissionId: r!.id, boothId: b.id, studentId: r!.studentId, reason },
-      );
+      await tx.admission.update({
+        where: { id: r!.id },
+        data: { state: "CANCELLED" },
+      });
+      await tx.voterSession.updateMany({
+        where: { admissionId: r!.id },
+        data: { revoked: true },
+      });
+      await audit(tx, res.locals.admin.id, e.id, "ADMISSION_CANCELLED", {
+        admissionId: r!.id,
+        boothId: b.id,
+        studentId: r!.studentId,
+        reason,
+      });
     });
     res.json({ data: { ok: true } });
   },
@@ -456,7 +416,7 @@ boothApi.post(
         !(await tx.admission.findFirst({
           where: { boothId: b.id, state: { in: ["WAITING", "APPROVED"] } },
         })),
-        "Hay una solicitud vigente en esta cabina. Solicita ayuda a la mesa.",
+        "Hay una sesión vigente en esta cabina. Cancélala antes de continuar.",
       );
       const s = await tx.student.findUnique({
         where: {
@@ -494,15 +454,21 @@ boothApi.post(
             state: { in: ["WAITING", "APPROVED"] },
           },
         })),
-        "Solicita ayuda a la mesa: existe una verificación en curso.",
+        "Este estudiante ya tiene una sesión vigente en otra cabina.",
       );
       const r = await tx.admission.create({
         data: {
           electionId: e.id,
           boothId: b.id,
           studentId: s.id,
+          state: "APPROVED",
           expiresAt: new Date(Date.now() + 300000),
         },
+      });
+      await audit(tx, null, e.id, "DNI_ADMISSION_CREATED", {
+        admissionId: r.id,
+        boothId: b.id,
+        studentId: s.id,
       });
       return { id: r.id, state: r.state };
     });
@@ -530,7 +496,7 @@ boothApi.post("/claim", async (req, res) => {
     });
     requireState(
       !!r,
-      "Espera la verificación de la mesa o solicita una nueva autorización.",
+      "La sesión terminó o no está disponible. Vuelve a ingresar tu DNI.",
     );
     const p = await tx.participation.findUniqueOrThrow({
       where: {
