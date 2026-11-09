@@ -1377,6 +1377,8 @@ export function Settings() {
         nullAllowed: election.nullAllowed,
         regulation: election.regulation,
         contact: election.contact,
+        institutionalApprovalReference:
+          election.institutionalApprovalReference || "",
         shifts: election.windows.map((w: any) => w.shift),
         authMode: election.authMode,
       });
@@ -1404,6 +1406,7 @@ export function Settings() {
       nullAllowed: true,
       regulation: "Reglamento electoral institucional 2026",
       contact: "Solicita ayuda a tu mesa de votación.",
+      institutionalApprovalReference: "",
       shifts: ["MANANA", "TARDE"],
       authMode: "DESK",
     });
@@ -1490,6 +1493,23 @@ export function Settings() {
                 value={form.contact}
                 onChange={(e) => setForm({ ...form, contact: e.target.value })}
                 required
+              />
+            </Field>
+            <Field
+              label="Referencia de autorización institucional"
+              hint="Número y fecha del acta, oficio o acuerdo real del colegio. Requerida para preparar una elección oficial."
+            >
+              <input
+                aria-label="Referencia de autorización institucional"
+                value={form.institutionalApprovalReference}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    institutionalApprovalReference: e.target.value,
+                  })
+                }
+                minLength={6}
+                maxLength={300}
               />
             </Field>
             <div className="check-options">
@@ -1676,6 +1696,8 @@ const auditLabels: Record<string, string> = {
   LIST_CREATED: "Lista registrada",
   LIST_UPDATED: "Lista actualizada",
   ELECTION_UPDATED: "Configuración actualizada",
+  INSTITUTIONAL_REFERENCE_UPDATED:
+    "Referencia de autorización institucional actualizada",
   DEMO_REPLACED: "Simulación archivada",
   DEMO_CREATED_FROM_PREVIOUS: "Nueva simulación creada",
   REPORT_PDF_EXPORTED: "Acta PDF descargada",

@@ -54,6 +54,12 @@ La vista previa devuelve `total`, `valid`, `invalid`, `newCount`, `skipped`, err
 
 Reemisión: por lote únicamente en BORRADOR; individual también en PREPARADA/EN_CURSO/PAUSADA, para electores pendientes habilitados con turno no cerrado. Toma bloqueo exclusivo de elección, vuelve a comprobar condiciones, reemplaza hashes y revoca sesiones en una transacción. Los accesos y votos vuelven a comprobar la credencial/sesión tras adquirir su bloqueo para evitar carreras con la reemisión. Los motivos se auditan sin incluir códigos ni papeletas.
 
+## Referencia de autorización institucional por elección
+
+`POST /admin/elections` y `PATCH /admin/elections/:id` aceptan `institutionalApprovalReference` opcional: texto recortado, vacío o de 6–300 caracteres. Se guarda dentro de la transacción de configuración, con permiso `elections:write` y solo en BORRADOR. Si se omite en un PATCH, conserva el valor anterior. Enviar vacío lo borra y vuelve a impedir la preparación oficial. GET de listado y detalle devuelve el valor actual; no se expone en el endpoint público de elecciones.
+
+Se almacena como referencia de aprobación `type:institutional-reference`, `state:RECORDED`, sin afirmar que otro operador la aprobó. La auditoría inmutable `INSTITUTIONAL_REFERENCE_UPDATED` registra actor y valores `previous`/`value`. La preparación de una elección OFICIAL comprueba exclusivamente su referencia guardada; ignora `INSTITUTIONAL_APPROVAL_REFERENCE` del entorno. No hay nueva columna ni migración, y no se altera el flujo de dos operadores para cierre y publicación.
+
 ## Votación directa con DNI (`authMode: DESK`)
 
 Las elecciones nuevas y las oficiales usan acceso directo con DNI. Se conserva el valor interno `DESK` para actualizar elecciones existentes sin migraciones; ya no representa verificación de mesa ni registro de equipos. CODE se conserva para simulaciones anteriores.

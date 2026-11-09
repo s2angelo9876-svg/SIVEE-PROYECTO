@@ -52,6 +52,15 @@ export const electionSchema = z
     nullAllowed: z.boolean(),
     regulation: z.string().min(3).max(300),
     contact: z.string().min(3).max(200),
+    institutionalApprovalReference: z
+      .string()
+      .trim()
+      .max(300)
+      .refine(
+        (value) => !value || value.length >= 6,
+        "Escribe una referencia de al menos seis caracteres.",
+      )
+      .optional(),
     shifts: z
       .array(shiftSchema)
       .min(1)

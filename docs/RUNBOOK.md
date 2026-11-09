@@ -41,7 +41,7 @@ Nunca restaures sobre la elección activa como primer recurso. Restaura en una b
 
 ## Requisitos del despliegue oficial
 
-Usar base separada, cuentas sin fixtures, MFA, secretos seguros, HTTPS y cookies Secure, reglas institucionales documentadas, backups fuera del servidor y ensayo de recuperación/red eléctrica. En el modo oficial se exige `INSTITUTIONAL_APPROVAL_REFERENCE` al preparar; esa variable registra una referencia y no certifica una autorización. La separación de servidores, la custodia de esa referencia y los roles deben validarse fuera de la aplicación.
+Usar base separada, cuentas sin fixtures, MFA, secretos seguros, HTTPS y cookies Secure, reglas institucionales documentadas, backups fuera del servidor y ensayo de recuperación/red eléctrica. En el modo oficial se exige la referencia en **Configuración → Referencia de autorización institucional** de esa elección; se guarda desde el panel y no certifica por sí sola una autorización. La separación de servidores, la custodia de esa referencia y los roles deben validarse fuera de la aplicación.
 
 ## Revisión de evidencias
 

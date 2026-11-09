@@ -105,6 +105,22 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
     shifts: ["MANANA", "TARDE"],
   });
   const root = "/admin/elections/" + election.id;
+  await page.goto("/admin/configuracion");
+  const institutionalReference = page.getByLabel(
+    "Referencia de autorización institucional",
+    { exact: true },
+  );
+  await institutionalReference.fill(
+    "Acta sintética del ensayo de navegador 2027",
+  );
+  await page
+    .getByRole("button", { name: "Guardar configuración", exact: true })
+    .click();
+  await expect(page.getByText("La configuración fue guardada.")).toBeVisible();
+  await page.reload();
+  await expect(institutionalReference).toHaveValue(
+    "Acta sintética del ensayo de navegador 2027",
+  );
   await page.goto("/admin/padron");
   await expect(
     page.getByRole("heading", { name: "Padrón del colegio", exact: true }),

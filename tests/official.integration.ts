@@ -1059,6 +1059,185 @@ try {
     },
   );
   await check(
+    "Autorización por elección se guarda desde configuración, se audita y no depende de Railway",
+    async () => {
+      const input = {
+        name: "Elección oficial con referencia propia",
+        year: 2027,
+        scope: "Municipio escolar",
+        blankAllowed: true,
+        nullAllowed: true,
+        regulation: "Reglamento sintético de prueba",
+        contact: "Comité del ensayo",
+        shifts: ["MANANA"],
+        institutionalApprovalReference: "",
+      };
+      const election = success(
+        await req("/admin/elections", "POST", input, committee),
+      );
+      const target = `/admin/elections/${election.id}`;
+      await db.election.update({
+        where: { id: election.id },
+        data: { mode: "OFICIAL" },
+      });
+      success(
+        await req(
+          target + school + "/import",
+          "POST",
+          {
+            requestId: crypto.randomUUID(),
+            individual: {
+              studentCode: "REFERENCIA-01",
+              document: "00008888",
+              displayName: "Elector sintético de autorización",
+              grade: "1",
+              section: "HONESTIDAD",
+              enrollment: "DEFINITIVA",
+            },
+          },
+          committee,
+        ),
+      );
+      for (const number of [1, 2])
+        success(
+          await req(
+            target + "/lists",
+            "POST",
+            {
+              number,
+              name: "Lista con autorización " + number,
+              symbol: "sprout",
+              color: "#0b1f3a",
+              candidates: [
+                { name: "Candidata sintética", position: "Alcaldía" },
+              ],
+              proposal: "",
+              active: true,
+            },
+            committee,
+          ),
+        );
+      const previousEnv = process.env.INSTITUTIONAL_APPROVAL_REFERENCE;
+      process.env.INSTITUTIONAL_APPROVAL_REFERENCE =
+        "Referencia global que no debe autorizar esta elección";
+      try {
+        const blocked = await req(target + "/prepare", "POST", {}, committee);
+        assert.equal(blocked.status, 409);
+        assert.match(blocked.data.error.message, /Configuración/);
+        assert.equal(
+          (
+            await req(
+              target,
+              "PATCH",
+              { ...input, institutionalApprovalReference: "ABC" },
+              committee,
+            )
+          ).status,
+          400,
+        );
+        const reference = "Acta sintética de autorización del ensayo 2027";
+        assert.equal(
+          (
+            await req(
+              target,
+              "PATCH",
+              { ...input, institutionalApprovalReference: reference },
+              observer,
+            )
+          ).status,
+          403,
+        );
+        const updated = success(
+          await req(
+            target,
+            "PATCH",
+            { ...input, institutionalApprovalReference: reference },
+            committee,
+          ),
+        );
+        assert.equal(updated.institutionalApprovalReference, reference);
+        assert.equal(
+          success(await req(target, "GET", undefined, committee))
+            .institutionalApprovalReference,
+          reference,
+        );
+        assert.equal(
+          success(
+            await req("/admin/elections", "GET", undefined, committee),
+          ).find((r: any) => r.id === election.id)
+            .institutionalApprovalReference,
+          reference,
+        );
+        const { institutionalApprovalReference: _ref, ...legacyInput } = input;
+        success(await req(target, "PATCH", legacyInput, committee));
+        assert.equal(
+          success(await req(target, "GET", undefined, committee))
+            .institutionalApprovalReference,
+          reference,
+        );
+        success(await req(target, "PATCH", input, committee));
+        assert.equal(
+          (await req(target + "/prepare", "POST", {}, committee)).status,
+          409,
+        );
+        success(
+          await req(
+            target,
+            "PATCH",
+            { ...input, institutionalApprovalReference: reference },
+            committee,
+          ),
+        );
+        const history = await db.audit.findMany({
+          where: {
+            electionId: election.id,
+            action: "INSTITUTIONAL_REFERENCE_UPDATED",
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        assert.equal(history.length, 3);
+        assert.equal(history[1].detail.previous, reference);
+        assert.equal(history[1].detail.value, "");
+        assert.ok(history.every((r: any) => !!r.adminId));
+        assert.equal(
+          await db.approval.count({
+            where: { electionId: election.id, type: "institutional-reference" },
+          }),
+          1,
+        );
+        const other = success(
+          await req(
+            "/admin/elections",
+            "POST",
+            { ...input, name: "Otra elección sin referencia heredada" },
+            committee,
+          ),
+        );
+        assert.equal(other.institutionalApprovalReference, "");
+        success(await req(target + "/prepare", "POST", {}, committee));
+        assert.equal(
+          (
+            await req(
+              target,
+              "PATCH",
+              {
+                ...input,
+                institutionalApprovalReference:
+                  "Cambio posterior al cierre del borrador",
+              },
+              committee,
+            )
+          ).status,
+          409,
+        );
+      } finally {
+        if (previousEnv === undefined)
+          delete process.env.INSTITUTIONAL_APPROVAL_REFERENCE;
+        else process.env.INSTITUTIONAL_APPROVAL_REFERENCE = previousEnv;
+      }
+    },
+  );
+  await check(
     "Producción exige MFA: primer acceso limitado, activación y rechazo sin segundo factor",
     async () => {
       config.SIVEE_ENV = "production";

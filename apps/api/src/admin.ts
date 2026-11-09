@@ -21,7 +21,13 @@ import {
   shiftSchema,
   hasPermission,
 } from "../../../packages/shared/domain.js";
-import { audit, lockElection, turnout, reconcile } from "./services.js";
+import {
+  audit,
+  lockElection,
+  turnout,
+  reconcile,
+  type Tx,
+} from "./services.js";
 import {
   rosterInputSchema,
   inspectRoster,
@@ -35,6 +41,41 @@ import {
   credentialExpiry,
 } from "./roster.js";
 export const admin = Router();
+const institutionalReferenceType = "institutional-reference";
+async function readInstitutionalReference(tx: Tx, electionId: string) {
+  return tx.approval.findFirst({
+    where: { electionId, type: institutionalReferenceType, state: "RECORDED" },
+  });
+}
+async function saveInstitutionalReference(
+  tx: Tx,
+  electionId: string,
+  adminId: string,
+  reference?: string,
+) {
+  if (reference === undefined) return;
+  const current = await readInstitutionalReference(tx, electionId);
+  if ((current?.reason || "") === reference) return;
+  if (current)
+    await tx.approval.update({
+      where: { id: current.id },
+      data: { reason: reference, requesterId: adminId },
+    });
+  else
+    await tx.approval.create({
+      data: {
+        electionId,
+        type: institutionalReferenceType,
+        state: "RECORDED",
+        requesterId: adminId,
+        reason: reference,
+      },
+    });
+  await audit(tx, adminId, electionId, "INSTITUTIONAL_REFERENCE_UPDATED", {
+    previous: current?.reason || "",
+    value: reference,
+  });
+}
 const dummyHash = await passwordHash("invalid-admin-password");
 admin.post(
   "/auth/login",
@@ -264,14 +305,28 @@ admin.get("/elections", async (_req, res) => {
   const all = await db.election.findMany({
     where: { institutionId: u.institutionId },
     orderBy: { createdAt: "desc" },
-    include: { windows: true, institution: true },
+    include: {
+      windows: true,
+      institution: true,
+      approvals: {
+        where: { type: institutionalReferenceType, state: "RECORDED" },
+        select: { reason: true },
+        take: 1,
+      },
+    },
   });
   res.json({
-    data: all.filter((e) => hasPermission(u.grants, "elections:read", e.id)),
+    data: all
+      .filter((e) => hasPermission(u.grants, "elections:read", e.id))
+      .map(({ approvals, ...e }) => ({
+        ...e,
+        institutionalApprovalReference: approvals[0]?.reason || "",
+      })),
   });
 });
 admin.post("/elections", permit("elections:write"), async (req, res) => {
-  const { shifts, ...input } = electionSchema.parse(req.body);
+  const { shifts, institutionalApprovalReference, ...input } =
+    electionSchema.parse(req.body);
   const u = res.locals.admin;
   const authMode = input.authMode || "DESK";
   requireState(
@@ -288,8 +343,17 @@ admin.post("/elections", permit("elections:write"), async (req, res) => {
         windows: { create: shifts.map((shift) => ({ shift })) },
       },
     });
+    await saveInstitutionalReference(
+      tx,
+      e.id,
+      u.id,
+      institutionalApprovalReference,
+    );
     await audit(tx, u.id, e.id, "ELECTION_CREATED");
-    return e;
+    return {
+      ...e,
+      institutionalApprovalReference: institutionalApprovalReference || "",
+    };
   });
   res.status(201).json({ data: e });
 });
@@ -302,10 +366,20 @@ admin.get("/elections/:id", permit("elections:read"), async (req, res) => {
       approvals: { orderBy: { createdAt: "desc" } },
     },
   });
-  res.json({ data: e });
+  res.json({
+    data: {
+      ...e,
+      institutionalApprovalReference:
+        e.approvals.find(
+          (a) =>
+            a.type === institutionalReferenceType && a.state === "RECORDED",
+        )?.reason || "",
+    },
+  });
 });
 admin.patch("/elections/:id", permit("elections:write"), async (req, res) => {
-  const { shifts, ...input } = electionSchema.parse(req.body);
+  const { shifts, institutionalApprovalReference, ...input } =
+    electionSchema.parse(req.body);
   const e = await db.$transaction(async (tx) => {
     const e = await lockElection(tx, String(req.params.id), true);
     requireState(e.state === "BORRADOR");
@@ -322,8 +396,18 @@ admin.patch("/elections/:id", permit("elections:write"), async (req, res) => {
       where: { id: e.id },
       data: input,
     });
+    await saveInstitutionalReference(
+      tx,
+      e.id,
+      res.locals.admin.id,
+      institutionalApprovalReference,
+    );
     await audit(tx, res.locals.admin.id, e.id, "ELECTION_UPDATED");
-    return changed;
+    return {
+      ...changed,
+      institutionalApprovalReference:
+        (await readInstitutionalReference(tx, e.id))?.reason || "",
+    };
   });
   res.json({ data: e });
 });
@@ -359,9 +443,9 @@ admin.post(
         );
       if (e.mode === "OFICIAL")
         requireState(
-          (process.env.INSTITUTIONAL_APPROVAL_REFERENCE?.trim().length || 0) >
-            5,
-          "Falta registrar la autorización institucional en el despliegue.",
+          ((await readInstitutionalReference(tx, e.id))?.reason.trim().length ||
+            0) >= 6,
+          "Completa la referencia de autorización institucional en Configuración de esta elección.",
         );
       await audit(tx, res.locals.admin.id, e.id, "ELECTION_PREPARED");
       return tx.election.update({
