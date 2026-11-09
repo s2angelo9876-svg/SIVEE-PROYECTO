@@ -225,7 +225,7 @@ export function Landing() {
           <p>
             {e?.authMode === "CODE"
               ? "Ten a mano tu documento y código de simulación."
-              : "Ten a mano tu DNI. Puedes votar directamente cuando tu turno esté abierto."}
+              : "Ten a mano tu DNI. Puedes votar cuando la jornada esté abierta, sin importar tu turno."}
           </p>
         </section>
         <section className="landing-steps">
@@ -578,7 +578,11 @@ export function VoterFlow() {
             <div className="section-icon">
               <GraduationCap size={28} />
             </div>
-            <p className="eyebrow">VERIFICACIÓN DE IDENTIDAD</p>
+            <p className="eyebrow">
+              {e?.authMode === "DESK"
+                ? "DATOS DEL PADRÓN"
+                : "VERIFICACIÓN DE IDENTIDAD"}
+            </p>
             <h1>¿Estos son tus datos?</h1>
             <p>Revisa tu información antes de continuar.</p>
             <div className="identity-card">
@@ -591,9 +595,11 @@ export function VoterFlow() {
                 <span>
                   Sección <strong>{identity.section}</strong>
                 </span>
-                <span>
-                  Turno <strong>{shiftLabel(identity.shift)}</strong>
-                </span>
+                {e?.authMode === "CODE" && (
+                  <span>
+                    Turno <strong>{shiftLabel(identity.shift)}</strong>
+                  </span>
+                )}
               </div>
             </div>
             <button

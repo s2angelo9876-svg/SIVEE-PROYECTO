@@ -183,7 +183,6 @@ export function schoolIssues(row: {
       "Documento pendiente de revisión: se requieren ocho dígitos de DNI.",
     !/^[1-6]$/.test(row.grade) && "Grado pendiente de revisión.",
     !row.section.trim() && "Falta la sección.",
-    !row.shift && "Turno pendiente de asignación.",
     row.enrollment !== "DEFINITIVA" &&
       !row.enrollmentApproved &&
       "El comité debe resolver el estado de matrícula.",

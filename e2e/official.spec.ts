@@ -182,13 +182,7 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
     page.getByRole("heading", { name: "2 estudiantes encontrados" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Guardar en borrador" }).click();
-  await expect(page.getByLabel("Grupos a asignar")).toBeVisible();
-  await page.getByLabel("Grupos a asignar").selectOption({ index: 0 });
-  await page
-    .getByLabel("Motivo y referencia de asignación")
-    .fill("Distribución confirmada del ensayo escolar");
-  await page.getByRole("button", { name: "Asignar turno confirmado" }).click();
-  await expect(page.getByText("Turno asignado a 2 registros.")).toBeVisible();
+  await expect(page.getByLabel("Grupos a asignar")).toHaveCount(0);
   await page
     .getByRole("button", { name: "Confirmar padrón revisado", exact: true })
     .click();
@@ -297,7 +291,7 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
       .fill("10000000");
     await voter.getByRole("button", { name: "Continuar con mi DNI" }).click();
     await expect(voter.getByRole("alert")).toContainText(
-      "La votación no está abierta para tu turno.",
+      "La jornada no está abierta para votar.",
     );
     await api(root + "/prepare", {});
     await api(root + "/windows/MANANA/open", {

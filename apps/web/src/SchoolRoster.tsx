@@ -10,7 +10,6 @@ import {
   downloadText,
   csvCell,
   dateFormat,
-  shiftLabel,
   readBase64,
 } from "./lib";
 
@@ -36,9 +35,6 @@ function SchoolRosterScreen() {
     [reason, setReason] = useState(""),
     [publish, setPublish] = useState(false),
     [updateProfiles, setUpdateProfiles] = useState(false);
-  const [groups, setGroups] = useState<string[]>([]),
-    [shift, setShift] = useState("MANANA"),
-    [shiftReason, setShiftReason] = useState("");
   const load = async () => setData(await api(root));
   useEffect(() => {
     if (can("roster:write")) void load().catch((e) => setError(e.message));
@@ -62,13 +58,6 @@ function SchoolRosterScreen() {
         .toLocaleLowerCase()
         .includes(query.toLocaleLowerCase()),
   );
-  const groupNames = [
-    ...new Set<string>(
-      (data?.rows || [])
-        .filter((r: any) => !r.publishedAt && !r.excluded)
-        .map((r: any) => JSON.stringify([r.grade, r.section])),
-    ),
-  ];
   if (!can("roster:write"))
     return (
       <Notice>Esta pantalla requiere permiso de operador de padrón.</Notice>
@@ -105,7 +94,7 @@ function SchoolRosterScreen() {
     <>
       <PageTitle
         title="Padrón del colegio"
-        description="Revisa documentos, matrículas y turnos antes de habilitar la elección. El estudiante votará directamente con su DNI."
+        description="Carga el padrón y resuelve únicamente los datos pendientes. No necesitas asignar ni verificar turnos para votar con DNI."
         action={
           editable && (
             <button
@@ -290,75 +279,6 @@ function SchoolRosterScreen() {
           )}
         </section>
       )}
-      {editable && groupNames.length > 0 && (
-        <section className="panel">
-          <h2>Asignar turnos por grado y sección</h2>
-          <p>
-            Selecciona únicamente los grupos cuya distribución haya confirmado
-            el colegio.
-          </p>
-          <Field label="Grupos a asignar">
-            <select
-              multiple
-              size={Math.min(8, groupNames.length)}
-              value={groups}
-              disabled={busy}
-              onChange={(e) =>
-                setGroups([...e.target.selectedOptions].map((o) => o.value))
-              }
-            >
-              {groupNames.map((g) => {
-                const [grade, section] = JSON.parse(g);
-                return (
-                  <option key={g} value={g}>
-                    {grade}° · {section}
-                  </option>
-                );
-              })}
-            </select>
-          </Field>
-          <Field label="Turno para los grupos seleccionados">
-            <select value={shift} onChange={(e) => setShift(e.target.value)}>
-              {election.windows.map((w: any) => (
-                <option key={w.shift} value={w.shift}>
-                  {shiftLabel(w.shift)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Motivo y referencia de asignación">
-            <input
-              value={shiftReason}
-              maxLength={300}
-              onChange={(e) => setShiftReason(e.target.value)}
-            />
-          </Field>
-          <button
-            className="button secondary"
-            disabled={busy || !groups.length || shiftReason.trim().length < 10}
-            onClick={() =>
-              void run(async () => {
-                const r = await api(root + "/assign-shift", {
-                  method: "POST",
-                  body: {
-                    groups: groups.map((g) => {
-                      const [grade, section] = JSON.parse(g);
-                      return { grade, section };
-                    }),
-                    shift,
-                    reason: shiftReason,
-                  },
-                });
-                setGroups([]);
-                await load();
-                setMessage(`Turno asignado a ${r.count} registros.`);
-              })
-            }
-          >
-            Asignar turno confirmado
-          </button>
-        </section>
-      )}
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -433,7 +353,6 @@ function SchoolRosterScreen() {
               <tr>
                 <th>Estudiante</th>
                 <th>Grado / sección</th>
-                <th>Turno</th>
                 <th>Estado</th>
                 <th>Acción</th>
               </tr>
@@ -450,7 +369,6 @@ function SchoolRosterScreen() {
                   <td>
                     {r.grade}° {r.section}
                   </td>
-                  <td>{r.shift ? shiftLabel(r.shift) : "Pendiente"}</td>
                   <td>
                     {r.excluded
                       ? "Excluido con motivo"
@@ -563,21 +481,6 @@ function SchoolRosterScreen() {
                   />
                 </Field>
               ))}
-              <Field label="Turno del estudiante">
-                <select
-                  value={form.shift || ""}
-                  onChange={(e) =>
-                    setForm({ ...form, shift: e.target.value || null })
-                  }
-                >
-                  <option value="">Pendiente de confirmar</option>
-                  {election.windows.map((w: any) => (
-                    <option value={w.shift} key={w.shift}>
-                      {shiftLabel(w.shift)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
             </div>
             {form.id && (
               <>

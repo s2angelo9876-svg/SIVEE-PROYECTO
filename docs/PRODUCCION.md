@@ -1,6 +1,6 @@
 # SIVEE presencial: instalación y jornada oficial
 
-El alumno abre `/votar`, ingresa solamente su DNI y accede a la cédula cuando la elección y su turno están abiertos. No se registran equipos, asignan responsables ni solicitan códigos o aprobaciones de mesa. Funciona desde cualquier dispositivo con el enlace. Conocer un DNI ajeno podría permitir suplantar al estudiante: el sistema comprueba elegibilidad y voto único, no la identidad de quien usa el documento. El colegio debe organizar la supervisión presencial de la jornada.
+El alumno abre `/votar`, ingresa solamente su DNI y accede a la cédula cuando la jornada tiene un horario de votación abierto. No se registran equipos, asignan responsables ni solicitan códigos o aprobaciones de mesa. Funciona desde cualquier dispositivo con el enlace. Conocer un DNI ajeno podría permitir suplantar al estudiante: el sistema comprueba elegibilidad y voto único, no la identidad de quien usa el documento. El colegio debe organizar la supervisión presencial de la jornada.
 
 ## Desplegar en Railway
 
@@ -39,11 +39,11 @@ Si los registros de operaciones muestran Railpack y `npm run start`, ese servici
 
 ## Preparar el padrón real
 
-El Excel recibido contiene 1742 estudiantes, sin columna de turno. Detectamos 20 documentos vacíos, 5 de longitud diferente de ocho y 2 matrículas EN PROCESO, en filas distintas de los 25 problemas documentales. Estos casos requieren decisión del colegio. No completes documentos ni asignes turnos por suposición.
+El Excel recibido contiene 1742 estudiantes, sin columna de turno. Detectamos 20 documentos vacíos, 5 de longitud diferente de ocho y 2 matrículas EN PROCESO, en filas distintas de los 25 problemas documentales. Estos casos requieren decisión del colegio. No completes documentos por suposición. Ya no se exige asignar turnos a los estudiantes.
 
 1. En Padrón electoral carga el archivo original `.xlsx` o un CSV equivalente. Se reconocen ITEM, GRADO, SECCIÓN, NÚMERO DE DOCUMENTO, CÓDIGO DEL ESTUDIANTE, ESTUDIANTE, SEXO, FECHA DE NACIMIENTO, EDAD (AL 31 DE MARZO), ESTADO DE MATRICULA y TIPO DE VACANTE. La plantilla añade TURNO como columna opcional. El reporte de encabezados dobles y códigos en celdas combinadas es compatible. Solo se utiliza la primera hoja visible del reporte; mueve allí el listado si recibes otro archivo con varias hojas.
 2. Guarda en borrador y revisa los pendientes. El listado general enmascara documentos; solo un operador autorizado abre el documento completo para corregir. Los documentos del borrador se cifran. Sexo, nacimiento, edad y vacante no se almacenan ni se usan como preguntas de autenticación. El código de matrícula identifica el registro importado, **no es una contraseña**.
-3. Solicita a la dirección la distribución de mañana/tarde y asigna explícitamente cada grupo de grado y sección. Resuelve documentos y matrículas con motivo documentado. Para documentos distintos de DNI, el comité debe definir antes la política de elegibilidad: esta versión solo habilita DNI de ocho dígitos. No inventes un DNI para pasar la validación ni excluyas automáticamente a un alumno por tener otro documento.
+3. No se necesita distribuir ni verificar estudiantes por turno. El Excel sin TURNO puede confirmarse en una sola operación cuando sus datos válidos están completos. Resuelve únicamente documentos, duplicados, datos incompletos y matrículas pendientes con motivo documentado. Para documentos distintos de DNI, el comité debe definir antes la política de elegibilidad: esta versión solo habilita DNI de ocho dígitos. No inventes un DNI para pasar la validación ni excluyas automáticamente a un alumno por tener otro documento.
 4. Registrar estudiante permite incorporar un alumno omitido antes de preparar. Si no se conoce su código de matrícula, se genera una referencia interna. Los documentos repetidos bloquean la confirmación; una fila excluida conserva motivo e historial. Dos operadores que editan la misma versión no sobrescriben silenciosamente sus cambios.
 5. Confirma el padrón solo después de revisarlo. Esa confirmación fija las inscripciones para esta elección. Mientras siga en BORRADOR puedes añadir nuevos registros; los ya confirmados no se editan por esta pantalla. Ante una respuesta perdida consulta el historial; repetir la misma carga pendiente no duplica el lote. Antes de preparar verifica los totales y las 2–4 listas activas.
 
@@ -57,12 +57,14 @@ Este cambio utiliza el campo existente de símbolo y no requiere migración de b
 
 ## Votación directa con DNI
 
-1. Confirma el padrón y sus turnos, registra las listas y prepara la elección. Ya no se exige crear cabinas ni asignar responsables.
+1. Confirma el padrón, registra las listas y prepara la elección. Ya no se exige crear cabinas ni asignar responsables.
 2. Abre manualmente el turno correspondiente desde Jornada electoral. Mañana debe cerrarse antes de abrir tarde; los horarios también limitan la votación.
 3. Abre el enlace `/votar` en las laptops o dispositivos de los estudiantes, sin iniciar una cuenta administrativa en esos equipos. No hay enlaces de activación ni autorización de hardware.
-4. El alumno ingresa su propio DNI. Se comprueba que esté activo, inscrito, pendiente de votar y dentro de su turno. Revisa sus datos, elige y confirma su voto privado.
+4. El alumno ingresa su propio DNI. Se comprueba que esté activo, inscrito, pendiente de votar y dentro de un horario abierto de la jornada, sin comprobar su turno individual. Revisa sus datos, elige y confirma su voto privado.
 5. La sesión dura cinco minutos. Si vence, vuelve a ingresar el DNI. Un nuevo acceso para el mismo estudiante sustituye su sesión anterior, sin crear una segunda participación. Un doble envío del voto produce una sola papeleta.
 6. Tras votar se limpia la sesión del alumno. Para el siguiente alumno vuelve al inicio. No se puede iniciar otra votación con un DNI que ya participó.
+
+Los horarios de mañana y tarde controlan la apertura general: cualquier DNI habilitado puede votar en cualquiera de ellos. Los turnos antiguos del padrón se conservan como referencia, pero no bloquean acceso, cédula ni emisión del voto.
 
 Esta actualización no requiere migraciones ni ejecutar operaciones. Se conserva el valor interno `DESK` para compatibilidad con elecciones existentes. Las cabinas, responsables y admisiones anteriores quedan como historial y ya no condicionan el acceso. Si había una sesión antigua abierta, recarga la página e ingresa de nuevo el DNI. Los marcadores `/admin/mesa` y `/cabina/activar` redirigen a Jornada electoral y `/votar`, respectivamente.
 
@@ -71,7 +73,7 @@ Esta actualización no requiere migraciones ni ejecutar operaciones. Se conserva
 | Caso | Procedimiento |
 | --- | --- |
 | DNI ajeno, datos discrepantes o sospecha de suplantación | Pedir al estudiante que salga antes del voto, pausar el turno si es necesario, registrar incidencia y aplicar la comprobación presencial institucional. Si ya votó, escalar al comité sin borrar ni reasignar su papeleta. Nunca colocar el DNI completo o la preferencia en el motivo. |
-| Alumno omitido antes de preparar | Alta individual, revisión del documento/turno y confirmación. |
+| Alumno omitido antes de preparar | Alta individual, revisión de datos y confirmación. |
 | Omisión después de preparar o jornada abierta | No hay alta tardía automática. Registrar incidencia y elevar al comité conforme al reglamento; no editar SQL ni abrir otra elección para eludir controles. |
 | El sistema dice que ya participó | Comprobar participación e incidencia. No permitir un segundo voto ni borrar papeletas. La app no puede atribuir una papeleta secreta a una persona. |
 | Se corta la red al confirmar | Conservar la pantalla, reintentar o consultar participación. La transacción es atómica; no contar un éxito sin confirmación del servidor. No hay votos offline. |

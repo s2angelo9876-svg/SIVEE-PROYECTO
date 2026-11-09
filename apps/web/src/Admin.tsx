@@ -701,7 +701,11 @@ export function ElectionDay() {
     <>
       <PageTitle
         title="El ritmo de la jornada"
-        description="Abre, pausa y cierra cada turno con control y trazabilidad."
+        description={
+          election.authMode === "DESK"
+            ? "Abre, pausa y cierra los horarios de la jornada. Todo estudiante del padrón puede votar durante un horario abierto, sin verificar su turno."
+            : "Abre, pausa y cierra cada turno con control y trazabilidad."
+        }
         action={<Badge state={election.state} />}
       />
       {error && <Notice>{error}</Notice>}

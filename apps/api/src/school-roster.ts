@@ -212,10 +212,6 @@ schoolRoster.patch(
         !!row && !row.publishedAt && row.version === version,
         "El registro cambió o ya fue confirmado. Actualiza la pantalla.",
       );
-      requireState(
-        !data.shift || e.windows.some((w) => w.shift === data.shift),
-        "Turno no incluido en la elección.",
-      );
       await tx.schoolDraft.update({
         where: { id: row!.id },
         data: {
@@ -233,54 +229,6 @@ schoolRoster.patch(
       });
     });
     res.json({ data: { ok: true } });
-  },
-);
-schoolRoster.post(
-  root + "/assign-shift",
-  permit("roster:write"),
-  async (req, res) => {
-    const { groups, shift, reason } = z
-      .object({
-        groups: z
-          .array(
-            z
-              .object({
-                grade: z.string().min(1).max(30),
-                section: z.string().min(1).max(100),
-              })
-              .strict(),
-          )
-          .min(1)
-          .max(200),
-        shift: z.enum(["MANANA", "TARDE"]),
-        reason: reasonSchema,
-      })
-      .strict()
-      .parse(req.body);
-    const result = await db.$transaction(async (tx) => {
-      const e = await draftElection(tx, String(req.params.id));
-      requireState(
-        e.windows.some((w) => w.shift === shift),
-        "Turno no incluido en la elección.",
-      );
-      const result = await tx.schoolDraft.updateMany({
-        where: {
-          electionId: e.id,
-          publishedAt: null,
-          excluded: false,
-          OR: groups,
-        },
-        data: { shift, reason, version: { increment: 1 } },
-      });
-      await audit(tx, res.locals.admin.id, e.id, "SCHOOL_SHIFT_ASSIGNED", {
-        groups,
-        shift,
-        count: result.count,
-        reason,
-      });
-      return result;
-    });
-    res.json({ data: result });
   },
 );
 schoolRoster.post(
@@ -305,13 +253,9 @@ schoolRoster.post(
         );
         requireState(
           !pending.some((r) => r.issues.length),
-          "Resuelve todos los documentos, matrículas, duplicados y turnos pendientes antes de confirmar.",
+          "Resuelve los documentos, matrículas y duplicados pendientes antes de confirmar.",
         );
         const accepted = pending.filter((r) => !r.excluded);
-        requireState(
-          accepted.every((r) => e.windows.some((w) => w.shift === r.shift)),
-          "Hay turnos que no pertenecen a la elección.",
-        );
         const existing = await tx.student.findMany({
           where: {
             institutionId: e.institutionId,
@@ -334,7 +278,8 @@ schoolRoster.post(
             displayName: r.displayName,
             grade: r.grade,
             section: r.section,
-            shift: r.shift!,
+            // Legacy storage field only; DNI access does not depend on this value.
+            shift: r.shift ?? old?.shift ?? e.windows[0].shift,
           };
           const id = old?.id || crypto.randomUUID();
           if (old) {

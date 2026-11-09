@@ -14,7 +14,13 @@ import {
   verifyPassword,
 } from "./security.js";
 import { issueSession, voterAuth, cookieOptions } from "./auth.js";
-import { castVote, windowAvailable, lockElection, audit } from "./services.js";
+import {
+  castVote,
+  windowAvailable,
+  votingAvailable,
+  lockElection,
+  audit,
+} from "./services.js";
 export const voter = Router();
 const dummyHash = await passwordHash("not-a-valid-credential");
 const authLimit = rateLimit({
@@ -60,16 +66,11 @@ voter.post("/dni-sessions", authLimit, async (req, res) => {
         "AUTH_FAILED",
         "El DNI no está habilitado o ya registró su voto. Consulta al comité si necesitas ayuda.",
       );
-    if (
-      !windowAvailable(
-        e,
-        e.windows.find((w) => w.shift === p.shift),
-      )
-    )
+    if (!votingAvailable(e, p.shift))
       throw new AppError(
         409,
         "VOTING_WINDOW_CLOSED",
-        "La votación no está abierta para tu turno.",
+        "La jornada no está abierta para votar.",
       );
     await tx.voterSession.updateMany({
       where: {
@@ -298,16 +299,11 @@ voter.get("/ballot", async (_req, res) => {
       },
     },
   });
-  if (
-    !windowAvailable(
-      e,
-      e.windows.find((w) => w.shift === participation.shift),
-    )
-  )
+  if (!votingAvailable(e, participation.shift))
     throw new AppError(
       409,
       "VOTING_WINDOW_CLOSED",
-      "La votación no está habilitada para tu turno.",
+      "La jornada no está abierta para votar.",
     );
   res.json({
     data: {

@@ -21,9 +21,9 @@ it("lee 1742 filas, encabezados dobles y celdas combinadas sin inventar turnos",
     rows.filter((r) => r.document && r.document.length !== 8),
   ).toHaveLength(5);
   expect(rows.filter((r) => r.enrollment !== "DEFINITIVA")).toHaveLength(2);
-  expect(
-    rows.every((r) => r.shift === null && schoolIssues(r).length > 0),
-  ).toBe(true);
+  expect(rows.every((r) => r.shift === null)).toBe(true);
+  expect(rows.filter((r) => schoolIssues(r).length > 0)).toHaveLength(27);
+  expect(schoolIssues(rows[30])).toEqual([]);
   expect(rows[0].grade).toBe("1");
   expect(rows[0].section).toBe("HONESTIDAD Y RESPETO");
   expect(Object.keys(rows[0])).not.toContain("sex");
@@ -46,7 +46,7 @@ it("acepta CSV escolar con ceros iniciales y rechaza referencias duplicadas", as
     ),
   ).rejects.toThrow(/repetido/);
 });
-it("la plantilla se puede volver a importar y deja el turno pendiente", async () => {
+it("la plantilla se puede volver a importar sin exigir turno", async () => {
   const input = schoolSourceSchema.parse({
     requestId: crypto.randomUUID(),
     file: {
@@ -57,7 +57,8 @@ it("la plantilla se puede volver a importar y deja el turno pendiente", async ()
   const { rows } = await parseSchoolFile(input);
   expect(rows).toHaveLength(1);
   expect(rows[0].document).toBe("00000101");
-  expect(schoolIssues(rows[0])).toHaveLength(1);
+  expect(rows[0].shift).toBeNull();
+  expect(schoolIssues(rows[0])).toEqual([]);
 });
 it("documentos de borrador se cifran con nonce aleatorio y autenticación", () => {
   const a = encryptDocument("00123456"),

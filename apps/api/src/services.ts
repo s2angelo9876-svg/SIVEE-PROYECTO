@@ -41,6 +41,26 @@ export function windowAvailable(
     (!w.endsAt || +w.endsAt > now)
   );
 }
+export function votingAvailable(
+  election: {
+    state: string;
+    authMode: string;
+    windows: {
+      shift: string;
+      state: string;
+      startsAt: Date | null;
+      endsAt: Date | null;
+    }[];
+  },
+  studentShift: string,
+) {
+  return election.authMode === "DESK"
+    ? election.windows.some((w) => windowAvailable(election, w))
+    : windowAvailable(
+        election,
+        election.windows.find((w) => w.shift === studentShift),
+      );
+}
 export async function turnout(tx: Tx, id: string) {
   const eligible = await tx.participation.count({
     where: { electionId: id, state: { in: ["PENDIENTE", "VOTO_EMITIDO"] } },
@@ -140,15 +160,15 @@ export async function castVote(sessionId: string, raw: unknown) {
       if (p.state === "VOTO_EMITIDO") return { status: "ALREADY_RECORDED" };
       if (initial.consumed)
         throw new AppError(401, "UNAUTHENTICATED", "La sesión ha finalizado.");
-      await tx.$queryRaw`SELECT id FROM windows WHERE "electionId"=${e.id}::uuid AND shift=${p.shift} FOR SHARE`;
-      const w = await tx.window.findUnique({
-        where: { electionId_shift: { electionId: e.id, shift: p.shift } },
+      await tx.$queryRaw`SELECT id FROM windows WHERE "electionId"=${e.id}::uuid AND (${e.authMode}='DESK' OR shift=${p.shift}) FOR SHARE`;
+      const windows = await tx.window.findMany({
+        where: { electionId: e.id },
       });
-      if (!windowAvailable(e, w))
+      if (!votingAvailable({ ...e, windows }, p.shift))
         throw new AppError(
           409,
           "VOTING_WINDOW_CLOSED",
-          "La votación no está habilitada para tu turno.",
+          "La jornada no está abierta para votar.",
         );
       if (input.kind === "VALIDO") {
         const l = await tx.electoralList.findFirst({

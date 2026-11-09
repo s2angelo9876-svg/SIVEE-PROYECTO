@@ -15,8 +15,8 @@ export function DniIdentity({
     <section className="panel centered-panel">
       <h1>Identifícate con tu DNI</h1>
       <p>
-        Ingresa tu propio DNI para votar. Tu turno debe estar abierto y solo
-        puedes votar una vez.
+        Ingresa tu propio DNI para votar. La jornada debe estar abierta y solo
+        puedes votar una vez, sin importar tu turno.
       </p>
       {error && <Notice>{error}</Notice>}
       <form

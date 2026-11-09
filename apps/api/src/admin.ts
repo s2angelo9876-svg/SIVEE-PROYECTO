@@ -361,15 +361,6 @@ admin.post(
           })) === 0,
           "Confirma o resuelve los registros del borrador escolar antes de preparar.",
         );
-        requireState(
-          (await tx.participation.count({
-            where: {
-              electionId: e.id,
-              shift: { notIn: e.windows.map((w) => w.shift) },
-            },
-          })) === 0,
-          "Hay electores sin turno válido.",
-        );
       }
       if (e.mode === "OFICIAL")
         requireState(

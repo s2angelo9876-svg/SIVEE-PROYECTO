@@ -119,7 +119,7 @@ try {
       );
       const preview = success(await call(school + "/preview", fixture));
       assert.equal(preview.total, 1742);
-      assert.equal(preview.pending, 1742);
+      assert.equal(preview.pending, 27);
       assert.equal(preview.rows.length, 1742);
       assert.equal(preview.rows[1741].displayName, "Estudiante Sintético 1741");
       assert.equal(preview.rows[1741].document, "••••1741");
@@ -139,7 +139,7 @@ try {
       const state = success(await call(school));
       rows = state.rows;
       assert.equal(rows.length, 1742);
-      assert.equal(state.pending, 1742);
+      assert.equal(state.pending, 27);
       assert.ok(!JSON.stringify(state).includes('"document":"10000030"'));
       const stored = await db.schoolDraft.findFirstOrThrow({
         where: { electionId: e.id, studentCode: "MATRICULA-30" },
@@ -162,15 +162,8 @@ try {
     },
   );
   await check(
-    "Asignación explícita de turno, correcciones versionadas y 1742 electores sin códigos",
+    "1742 electores confirmados sin asignar turnos ni generar códigos",
     async () => {
-      success(
-        await call(school + "/assign-shift", {
-          groups: [{ grade: "1", section: "HONESTIDAD Y RESPETO" }],
-          shift: "MANANA",
-          reason: "Asignación sintética aprobada para ensayo",
-        }),
-      );
       rows = success(await call(school)).rows;
       for (let i = 0; i < 27; i++) {
         const r = rows.find((r) => r.studentCode === "MATRICULA-" + i);
@@ -392,7 +385,7 @@ try {
           reason: "Inicio del ensayo sin activación de equipos",
         }),
       );
-      assert.equal((await dniResponse("20000002")).status, 409);
+      success(await dniResponse("20000002"));
       assert.equal((await req("/booth/status")).status, 404);
       assert.equal(
         (await call("/desk/booths", { name: "Sin cabinas" })).status,
@@ -705,6 +698,48 @@ try {
       success(
         await req("/voter/me", "GET", undefined, await enterDni("10000036")),
       );
+    },
+  );
+  await check(
+    "Un DNI de tarde vota en la mañana y uno de mañana en la tarde, sin asignaciones adicionales",
+    async () => {
+      const afternoonStudent = await enterDni("20000002");
+      success(await req("/voter/ballot", "GET", undefined, afternoonStudent));
+      success(
+        await req(
+          "/voter/votes",
+          "POST",
+          { electionId: e.id, kind: "BLANCO" },
+          afternoonStudent,
+        ),
+      );
+      success(
+        await call("/windows/MANANA/close", {
+          reason: "Finalización del primer horario del ensayo",
+        }),
+      );
+      success(
+        await call("/windows/TARDE/open", {
+          reason: "Apertura del segundo horario sin restricción de turno",
+        }),
+      );
+      const morningStudent = await enterDni("10000037");
+      success(await req("/voter/ballot", "GET", undefined, morningStudent));
+      success(
+        await req(
+          "/voter/votes",
+          "POST",
+          { electionId: e.id, kind: "BLANCO" },
+          morningStudent,
+        ),
+      );
+      assert.equal(await db.ballot.count({ where: { electionId: e.id } }), 4);
+      success(
+        await call("/windows/TARDE/pause", {
+          reason: "Pausa general de todos los estudiantes",
+        }),
+      );
+      assert.equal((await dniResponse("10000038")).status, 409);
     },
   );
   await check(

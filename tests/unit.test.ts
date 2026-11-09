@@ -10,7 +10,7 @@ import {
   hasPermission,
   rosterRowSchema,
 } from "../packages/shared/domain";
-import { windowAvailable } from "../apps/api/src/services";
+import { windowAvailable, votingAvailable } from "../apps/api/src/services";
 import { parseRoster } from "../apps/api/src/roster-files";
 import { canonical, digest } from "../apps/api/src/security";
 import { totp } from "../apps/api/src/mfa";
@@ -116,6 +116,49 @@ describe("padrón y ventanas", () => {
       ),
     ).toBe(false);
   });
+});
+
+it("DNI permite cualquier turno, pero respeta pausa, cierre y horarios; CODE conserva su turno", () => {
+  const morning = {
+    shift: "MANANA",
+    state: "ABIERTA",
+    startsAt: null,
+    endsAt: null,
+  };
+  const afternoon = { ...morning, shift: "TARDE", state: "PROGRAMADA" };
+  const election = {
+    state: "EN_CURSO",
+    authMode: "DESK",
+    windows: [morning, afternoon],
+  };
+  expect(votingAvailable(election, "TARDE")).toBe(true);
+  expect(votingAvailable({ ...election, authMode: "CODE" }, "TARDE")).toBe(
+    false,
+  );
+  expect(votingAvailable({ ...election, state: "PAUSADA" }, "MANANA")).toBe(
+    false,
+  );
+  expect(
+    votingAvailable(
+      { ...election, windows: [{ ...morning, state: "CERRADA" }] },
+      "TARDE",
+    ),
+  ).toBe(false);
+  expect(
+    votingAvailable(
+      { ...election, windows: [{ ...morning, endsAt: new Date(0) }] },
+      "TARDE",
+    ),
+  ).toBe(false);
+  expect(
+    votingAvailable(
+      {
+        ...election,
+        windows: [{ ...morning, startsAt: new Date(Date.now() + 60000) }],
+      },
+      "TARDE",
+    ),
+  ).toBe(false);
 });
 
 // Public reference secret and expected values from RFC 6238, SHA-1, six digits.
