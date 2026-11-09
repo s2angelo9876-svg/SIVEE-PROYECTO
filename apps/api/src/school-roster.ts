@@ -1,17 +1,11 @@
 import { Router } from "express";
-import crypto from "node:crypto";
 import { z } from "zod";
 import { db } from "./db.js";
 import { permit } from "./auth.js";
 import { audit, lockElection, type Tx } from "./services.js";
-import {
-  AppError,
-  requireState,
-  hashSecret,
-  canonical,
-  dniLookup,
-} from "./security.js";
+import { AppError, requireState, hashSecret, canonical } from "./security.js";
 import { decryptDocument, encryptDocument } from "./private-data.js";
+import { schoolRecords, registerSchoolRecords } from "./school-registration.js";
 import {
   parseSchoolFile,
   schoolIssues,
@@ -31,31 +25,6 @@ async function draftElection(tx: Tx, id: string) {
   );
   return election;
 }
-async function drafts(tx: Tx, id: string) {
-  const rows = await tx.schoolDraft.findMany({
-    where: { electionId: id },
-    orderBy: [{ grade: "asc" }, { section: "asc" }, { displayName: "asc" }],
-  });
-  const decoded = rows.map(({ documentEncrypted, ...r }) => ({
-    ...r,
-    document: decryptDocument(documentEncrypted),
-  }));
-  const documents = new Map<string, number>();
-  decoded
-    .filter((r) => !r.excluded && r.document)
-    .forEach((r) =>
-      documents.set(r.document, (documents.get(r.document) || 0) + 1),
-    );
-  return decoded.map((r) => ({
-    ...r,
-    issues: [
-      ...schoolIssues(r),
-      ...(!r.excluded && r.document && documents.get(r.document)! > 1
-        ? ["Documento repetido en el borrador."]
-        : []),
-    ],
-  }));
-}
 schoolRoster.get(
   root + "/template.xlsx",
   permit("roster:write"),
@@ -68,7 +37,7 @@ schoolRoster.get(
 );
 schoolRoster.get(root, permit("roster:write"), async (req, res) => {
   const id = String(req.params.id),
-    rows = await drafts(db, id);
+    rows = await schoolRecords(db, id);
   const history = await db.schoolImport.findMany({
     where: { electionId: id },
     orderBy: { createdAt: "desc" },
@@ -83,12 +52,16 @@ schoolRoster.get(root, permit("roster:write"), async (req, res) => {
       })),
       history,
       total: rows.length,
-      pending: rows.filter((r) => !r.publishedAt && r.issues.length).length,
-      ready: rows.filter(
-        (r) => !r.publishedAt && !r.excluded && !r.issues.length,
-      ).length,
+      eligible: await db.participation.count({
+        where: { electionId: id, state: { in: ["PENDIENTE", "VOTO_EMITIDO"] } },
+      }),
+      unavailable: rows.filter((r) => !r.publishedAt && !r.excluded).length,
       excluded: rows.filter((r) => r.excluded).length,
-      published: rows.filter((r) => r.publishedAt && !r.excluded).length,
+      shifts: {
+        MANANA: rows.filter((r) => r.shift === "MANANA").length,
+        TARDE: rows.filter((r) => r.shift === "TARDE").length,
+        UNKNOWN: rows.filter((r) => !r.shift).length,
+      },
     },
   });
 });
@@ -116,11 +89,22 @@ schoolRoster.post(
         res.locals.election.authMode === "DESK",
     );
     const parsed = await parseSchoolFile(schoolSourceSchema.parse(req.body));
-    const rows = parsed.rows.map((r) => ({ ...r, issues: schoolIssues(r) }));
+    const counts = new Map<string, number>();
+    for (const r of parsed.rows)
+      if (r.document) counts.set(r.document, (counts.get(r.document) || 0) + 1);
+    const rows = parsed.rows.map((r) => ({
+      ...r,
+      issues: [
+        ...schoolIssues(r),
+        ...(r.document && counts.get(r.document)! > 1
+          ? ["DNI repetido; no se crea otra inscripción."]
+          : []),
+      ],
+    }));
     res.json({
       data: {
         total: rows.length,
-        pending: rows.filter((r) => r.issues.length).length,
+        unavailable: rows.filter((r) => r.issues.length).length,
         warnings: parsed.warnings,
         rows: rows.map(({ document, ...r }) => ({
           ...r,
@@ -138,54 +122,69 @@ schoolRoster.post(
       parsed = await parseSchoolFile(input);
     const payloadHash = hashSecret(canonical(parsed.rows)),
       id = String(req.params.id);
-    const result = await db.$transaction(async (tx) => {
-      await draftElection(tx, id);
-      const previous = await tx.schoolImport.findUnique({
-        where: { id: input.requestId },
-      });
-      if (previous) {
+    const result = await db.$transaction(
+      async (tx) => {
+        await draftElection(tx, id);
+        const previous = await tx.schoolImport.findUnique({
+          where: { id: input.requestId },
+        });
+        if (previous) {
+          requireState(
+            previous.electionId === id && previous.payloadHash === payloadHash,
+            "El identificador pertenece a otra carga.",
+          );
+          return { count: previous.total, alreadyImported: true };
+        }
+        const collision = await tx.schoolDraft.findFirst({
+          where: {
+            electionId: id,
+            studentCode: { in: parsed.rows.map((r) => r.studentCode) },
+          },
+        });
         requireState(
-          previous.electionId === id && previous.payloadHash === payloadHash,
-          "El identificador pertenece a otra carga.",
+          !collision,
+          "Hay referencias de matrícula ya cargadas. Consulta y corrige el registro existente.",
         );
-        return { count: previous.total, alreadyImported: true };
-      }
-      const collision = await tx.schoolDraft.findFirst({
-        where: {
-          electionId: id,
-          studentCode: { in: parsed.rows.map((r) => r.studentCode) },
-        },
-      });
-      requireState(
-        !collision,
-        "Hay referencias de matrícula ya cargadas. Consulta y corrige el borrador existente.",
-      );
-      await tx.schoolImport.create({
-        data: {
-          id: input.requestId,
-          electionId: id,
-          adminId: res.locals.admin.id,
-          source:
-            input.file?.name ||
-            (input.individual ? "Registro individual" : "CSV escolar"),
-          payloadHash,
-          total: parsed.rows.length,
-        },
-      });
-      await tx.schoolDraft.createMany({
-        data: parsed.rows.map(({ document, ...r }) => ({
-          ...r,
-          electionId: id,
+        await tx.schoolImport.create({
+          data: {
+            id: input.requestId,
+            electionId: id,
+            adminId: res.locals.admin.id,
+            source:
+              input.file?.name ||
+              (input.individual ? "Registro individual" : "CSV escolar"),
+            payloadHash,
+            total: parsed.rows.length,
+          },
+        });
+        await tx.schoolDraft.createMany({
+          data: parsed.rows.map(({ document, ...r }) => ({
+            ...r,
+            electionId: id,
+            batchId: input.requestId,
+            documentEncrypted: encryptDocument(document),
+          })),
+        });
+        await audit(tx, res.locals.admin.id, id, "SCHOOL_ROSTER_IMPORTED", {
           batchId: input.requestId,
-          documentEncrypted: encryptDocument(document),
-        })),
-      });
-      await audit(tx, res.locals.admin.id, id, "SCHOOL_ROSTER_STAGED", {
-        batchId: input.requestId,
-        count: parsed.rows.length,
-      });
-      return { count: parsed.rows.length, alreadyImported: false };
-    });
+          count: parsed.rows.length,
+        });
+        const registration = await registerSchoolRecords(
+          tx,
+          await tx.election.findUniqueOrThrow({
+            where: { id },
+            include: { windows: true },
+          }),
+          res.locals.admin.id,
+        );
+        return {
+          count: parsed.rows.length,
+          eligible: registration.count,
+          alreadyImported: false,
+        };
+      },
+      { timeout: 60000 },
+    );
     res.json({ data: result });
   },
 );
@@ -196,7 +195,7 @@ schoolRoster.patch(
     const input = schoolRowSchema
       .extend({
         version: z.number().int().positive(),
-        enrollmentApproved: z.boolean(),
+        enrollmentApproved: z.boolean().default(false),
         excluded: z.boolean(),
         reason: reasonSchema,
       })
@@ -210,7 +209,7 @@ schoolRoster.patch(
       });
       requireState(
         !!row && !row.publishedAt && row.version === version,
-        "El registro cambió o ya fue confirmado. Actualiza la pantalla.",
+        "El registro cambió o ya está habilitado. Actualiza la pantalla.",
       );
       await tx.schoolDraft.update({
         where: { id: row!.id },
@@ -227,99 +226,19 @@ schoolRoster.patch(
         excluded: data.excluded,
         enrollmentApproved: data.enrollmentApproved,
       });
+      await registerSchoolRecords(tx, e, res.locals.admin.id);
     });
     res.json({ data: { ok: true } });
   },
 );
 schoolRoster.post(
-  root + "/publish",
+  root + "/register",
   permit("roster:write"),
   async (req, res) => {
-    const { reason, updateProfiles } = z
-      .object({
-        reason: reasonSchema,
-        updateProfiles: z.boolean().default(false),
-      })
-      .strict()
-      .parse(req.body);
     const result = await db.$transaction(
       async (tx) => {
-        const e = await draftElection(tx, String(req.params.id)),
-          all = await drafts(tx, e.id);
-        const pending = all.filter((r) => !r.publishedAt);
-        requireState(
-          pending.length > 0,
-          "No hay registros nuevos por confirmar.",
-        );
-        requireState(
-          !pending.some((r) => r.issues.length),
-          "Resuelve los documentos, matrículas y duplicados pendientes antes de confirmar.",
-        );
-        const accepted = pending.filter((r) => !r.excluded);
-        const existing = await tx.student.findMany({
-          where: {
-            institutionId: e.institutionId,
-            dniLookup: { in: accepted.map((r) => dniLookup(r.document)) },
-          },
-          include: { participations: { where: { electionId: e.id } } },
-        });
-        const byDni = new Map(existing.map((s) => [s.dniLookup, s]));
-        const students = [],
-          participations = [];
-        let updated = 0;
-        for (const r of accepted) {
-          const key = dniLookup(r.document),
-            old = byDni.get(key);
-          requireState(
-            !old || (old.active && !old.participations.length),
-            `Fila ${r.sourceRow}: el estudiante ya está inscrito o está inactivo en la institución.`,
-          );
-          const profile = {
-            displayName: r.displayName,
-            grade: r.grade,
-            section: r.section,
-            // Legacy storage field only; DNI access does not depend on this value.
-            shift: r.shift ?? old?.shift ?? e.windows[0].shift,
-          };
-          const id = old?.id || crypto.randomUUID();
-          if (old) {
-            const changed = Object.entries(profile).some(
-              ([field, value]) => old[field as keyof typeof profile] !== value,
-            );
-            requireState(
-              !changed || updateProfiles,
-              "Hay datos institucionales distintos. Confirma explícitamente su actualización; se conserva el historial de otras elecciones.",
-            );
-            if (changed) {
-              await tx.student.update({ where: { id }, data: profile });
-              updated++;
-            }
-          } else
-            students.push({
-              id,
-              institutionId: e.institutionId,
-              dniLookup: key,
-              ...profile,
-            });
-          participations.push({ electionId: e.id, studentId: id, ...profile });
-        }
-        if (students.length) await tx.student.createMany({ data: students });
-        if (participations.length)
-          await tx.participation.createMany({ data: participations });
-        await tx.schoolDraft.updateMany({
-          where: { electionId: e.id, id: { in: pending.map((r) => r.id) } },
-          data: { publishedAt: new Date(), version: { increment: 1 } },
-        });
-        await audit(tx, res.locals.admin.id, e.id, "SCHOOL_ROSTER_CONFIRMED", {
-          count: accepted.length,
-          excluded: pending.length - accepted.length,
-          updatedProfiles: updated,
-          reason,
-        });
-        return {
-          count: accepted.length,
-          excluded: pending.length - accepted.length,
-        };
+        const e = await draftElection(tx, String(req.params.id));
+        return registerSchoolRecords(tx, e, res.locals.admin.id);
       },
       { timeout: 60000 },
     );

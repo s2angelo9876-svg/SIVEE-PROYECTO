@@ -8,6 +8,7 @@ import {
   schoolTemplate,
 } from "../apps/api/src/school-files";
 import { encryptDocument, decryptDocument } from "../apps/api/src/private-data";
+import { schoolShift } from "../apps/api/src/school-shifts";
 import { schoolFixture } from "./school-fixture";
 it("lee 1742 filas, encabezados dobles y celdas combinadas sin inventar turnos", async () => {
   const { rows } = await parseSchoolFile(
@@ -22,7 +23,7 @@ it("lee 1742 filas, encabezados dobles y celdas combinadas sin inventar turnos",
   ).toHaveLength(5);
   expect(rows.filter((r) => r.enrollment !== "DEFINITIVA")).toHaveLength(2);
   expect(rows.every((r) => r.shift === null)).toBe(true);
-  expect(rows.filter((r) => schoolIssues(r).length > 0)).toHaveLength(27);
+  expect(rows.filter((r) => schoolIssues(r).length > 0)).toHaveLength(25);
   expect(schoolIssues(rows[30])).toEqual([]);
   expect(rows[0].grade).toBe("1");
   expect(rows[0].section).toBe("HONESTIDAD Y RESPETO");
@@ -57,7 +58,7 @@ it("la plantilla se puede volver a importar sin exigir turno", async () => {
   const { rows } = await parseSchoolFile(input);
   expect(rows).toHaveLength(1);
   expect(rows[0].document).toBe("00000101");
-  expect(rows[0].shift).toBeNull();
+  expect(rows[0].shift).toBe("MANANA");
   expect(schoolIssues(rows[0])).toEqual([]);
 });
 it("documentos de borrador se cifran con nonce aleatorio y autenticación", () => {
@@ -69,4 +70,21 @@ it("documentos de borrador se cifran con nonce aleatorio y autenticación", () =
   const parts = a.split(".");
   parts[2] = Buffer.alloc(8).toString("base64url");
   expect(() => decryptDocument(parts.join("."))).toThrow();
+});
+
+it("clasifica por grado y sección conforme a la imagen y a Gabriel García Márquez confirmado", () => {
+  expect(schoolShift("1", "G")).toBe("MANANA");
+  expect(schoolShift("1", "H")).toBe("TARDE");
+  for (const grade of ["2", "3", "4", "5"]) {
+    expect(schoolShift(grade, "F")).toBe("MANANA");
+    expect(schoolShift(grade, "G")).toBe("TARDE");
+  }
+  expect(schoolShift("1", "tolerancia")).toBe("MANANA");
+  expect(schoolShift("1", "EMPATÍA")).toBe("TARDE");
+  expect(schoolShift("3", "JAVIER HERAUD PÉREZ")).toBe("TARDE");
+  expect(schoolShift("3", "Gabriel García Márquez")).toBe("TARDE");
+  expect(schoolShift("4", "LEONHARD EULER")).toBe("MANANA");
+  expect(schoolShift("5", "RENÉ DESCARTES")).toBe("TARDE");
+  expect(schoolShift("1", "HONESTIDAD Y RESPETO")).toBeNull();
+  expect(schoolShift("3", "L")).toBeNull();
 });

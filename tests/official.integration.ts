@@ -111,7 +111,7 @@ try {
   let rows: any[];
   const fixture = await schoolFixture();
   await check(
-    "Archivo 1742: permisos, cifrado, máscara, repetición idempotente y bloqueo de pendientes",
+    "Archivo 1742: registro automático, permisos, cifrado, repetición idempotente y 25 documentos no habilitados",
     async () => {
       assert.equal(
         (await call(school + "/import", fixture, "POST", observer)).status,
@@ -119,7 +119,7 @@ try {
       );
       const preview = success(await call(school + "/preview", fixture));
       assert.equal(preview.total, 1742);
-      assert.equal(preview.pending, 27);
+      assert.equal(preview.unavailable, 25);
       assert.equal(preview.rows.length, 1742);
       assert.equal(preview.rows[1741].displayName, "Estudiante Sintético 1741");
       assert.equal(preview.rows[1741].document, "••••1741");
@@ -139,7 +139,12 @@ try {
       const state = success(await call(school));
       rows = state.rows;
       assert.equal(rows.length, 1742);
-      assert.equal(state.pending, 27);
+      assert.equal(state.unavailable, 25);
+      assert.equal(state.eligible, 1717);
+      assert.equal(
+        await db.participation.count({ where: { electionId: e.id } }),
+        1717,
+      );
       assert.ok(!JSON.stringify(state).includes('"document":"10000030"'));
       const stored = await db.schoolDraft.findFirstOrThrow({
         where: { electionId: e.id, studentCode: "MATRICULA-30" },
@@ -151,7 +156,7 @@ try {
             reason: "Intento con pendientes de revisión",
           })
         ).status,
-        409,
+        404,
       );
       await assert.rejects(() =>
         db.schoolImport.updateMany({
@@ -162,10 +167,10 @@ try {
     },
   );
   await check(
-    "1742 electores confirmados sin asignar turnos ni generar códigos",
+    "Corregir un DNI lo registra automáticamente; sin confirmar alumnos ni aprobar matrículas",
     async () => {
       rows = success(await call(school)).rows;
-      for (let i = 0; i < 27; i++) {
+      for (let i = 0; i < 25; i++) {
         const r = rows.find((r) => r.studentCode === "MATRICULA-" + i);
         const body = {
           studentCode: r.studentCode,
@@ -175,7 +180,7 @@ try {
           section: r.section,
           shift: r.shift,
           enrollment: r.enrollment,
-          enrollmentApproved: true,
+          enrollmentApproved: false,
           excluded: false,
           version: r.version,
           reason: "Documento sintético cotejado por comité",
@@ -187,16 +192,8 @@ try {
             409,
           );
       }
-      const start = Date.now();
-      assert.equal(
-        success(
-          await call(school + "/publish", {
-            reason: "Confirmación del padrón sintético completo",
-          }),
-        ).count,
-        1742,
-      );
-      console.log("1742 electores confirmados en ms:", Date.now() - start);
+      assert.equal(success(await call(school + "/register", {})).count, 0);
+      assert.equal(success(await call(school)).eligible, 1742);
       assert.equal(
         await db.credential.count({ where: { electionId: e.id } }),
         0,
@@ -230,12 +227,8 @@ try {
       );
       assert.ok(r.issues.some((s: string) => s.includes("repetido")));
       assert.equal(
-        (
-          await call(school + "/publish", {
-            reason: "Intento de documento duplicado",
-          })
-        ).status,
-        409,
+        await db.participation.count({ where: { electionId: e.id } }),
+        1742,
       );
       success(
         await call(
@@ -250,14 +243,7 @@ try {
           "PATCH",
         ),
       );
-      assert.equal(
-        success(
-          await call(school + "/publish", {
-            reason: "Confirmación de exclusión del duplicado",
-          }),
-        ).count,
-        0,
-      );
+      assert.equal(success(await call(school + "/register", {})).count, 0);
     },
   );
   const uploadedLogo = logoData(logoPng(2, 2, 40000));
@@ -358,11 +344,6 @@ try {
             shift: "TARDE",
             enrollment: "DEFINITIVA",
           },
-        }),
-      );
-      success(
-        await call(school + "/publish", {
-          reason: "Confirmación de estudiante del turno tarde",
         }),
       );
       success(await call("/prepare", {}));
@@ -740,6 +721,120 @@ try {
         }),
       );
       assert.equal((await dniResponse("10000038")).status, 409);
+    },
+  );
+  await check(
+    "Carga antigua se registra al preparar sin confirmación y un DNI faltante no bloquea al resto",
+    async () => {
+      const legacy = success(
+        await req(
+          "/admin/elections",
+          "POST",
+          {
+            name: "Carga anterior sin confirmaciones",
+            year: 2027,
+            scope: "Municipio escolar",
+            blankAllowed: true,
+            nullAllowed: true,
+            regulation: "Reglamento del ensayo automático",
+            contact: "Comité del ensayo",
+            shifts: ["MANANA"],
+          },
+          committee,
+        ),
+      );
+      const admin = await db.admin.findUniqueOrThrow({
+        where: { email: "comite@sivee.demo" },
+      });
+      const batchId = crypto.randomUUID();
+      await db.schoolImport.create({
+        data: {
+          id: batchId,
+          electionId: legacy.id,
+          adminId: admin.id,
+          source: "Carga anterior sintética",
+          payloadHash: "synthetic",
+          total: 3,
+        },
+      });
+      const { encryptDocument } = await import(
+        "../apps/api/src/private-data.js"
+      );
+      await db.schoolDraft.createMany({
+        data: ["00009991", "", "10000030"].map((document, i) => ({
+          electionId: legacy.id,
+          batchId,
+          studentCode: "ANTERIOR-" + i,
+          sourceRow: i + 1,
+          documentEncrypted: encryptDocument(document),
+          displayName: "Alumno anterior " + i,
+          grade: "1",
+          section: "EMPATÍA",
+          enrollment: "EN PROCESO",
+        })),
+      });
+      for (const number of [1, 2])
+        success(
+          await req(
+            `/admin/elections/${legacy.id}/lists`,
+            "POST",
+            {
+              number,
+              name: "Lista del ensayo " + number,
+              symbol: "sprout",
+              color: "#0b1f3a",
+              candidates: [
+                { name: "Candidata sintética", position: "Alcaldía" },
+              ],
+              proposal: "",
+              active: true,
+            },
+            committee,
+          ),
+        );
+      success(
+        await req(
+          `/admin/elections/${legacy.id}/prepare`,
+          "POST",
+          {},
+          committee,
+        ),
+      );
+      assert.equal(
+        await db.participation.count({ where: { electionId: legacy.id } }),
+        2,
+      );
+      const state = success(
+        await req(
+          `/admin/elections/${legacy.id}/roster/school`,
+          "GET",
+          undefined,
+          committee,
+        ),
+      );
+      assert.equal(state.eligible, 2);
+      assert.equal(state.unavailable, 1);
+      assert.equal(state.shifts.TARDE, 3);
+      const original = await db.participation.findFirstOrThrow({
+        where: { electionId: e.id, displayName: "Estudiante Sintético 30" },
+      });
+      const reused = await db.participation.findUniqueOrThrow({
+        where: {
+          electionId_studentId: {
+            electionId: legacy.id,
+            studentId: original.studentId,
+          },
+        },
+      });
+      assert.equal(reused.displayName, "Alumno anterior 2");
+      assert.equal(
+        (
+          await db.student.findUniqueOrThrow({
+            where: { id: original.studentId },
+          })
+        ).displayName,
+        "Estudiante Sintético 30",
+      );
     },
   );
   await check(

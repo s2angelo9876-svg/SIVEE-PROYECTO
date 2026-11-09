@@ -2,6 +2,7 @@ import { z } from "zod";
 import ExcelJS from "exceljs";
 import { readSchoolTable } from "./roster-files.js";
 import { AppError } from "./security.js";
+import { schoolShift } from "./school-shifts.js";
 
 export const schoolRowSchema = z
   .object({
@@ -55,7 +56,15 @@ export async function parseSchoolFile(
 ) {
   if (input.individual)
     return {
-      rows: [{ ...input.individual, sourceRow: 1 }],
+      rows: [
+        {
+          ...input.individual,
+          shift:
+            schoolShift(input.individual.grade, input.individual.section) ??
+            input.individual.shift,
+          sourceRow: 1,
+        },
+      ],
       warnings: [] as string[],
     };
   const table = await readSchoolTable(input);
@@ -152,7 +161,13 @@ export async function parseSchoolFile(
         `Código de estudiante repetido en la fila ${line.row}.`,
       );
     codes.add(parsed.data.studentCode);
-    rows.push({ ...parsed.data, sourceRow: line.row });
+    rows.push({
+      ...parsed.data,
+      shift:
+        schoolShift(parsed.data.grade, parsed.data.section) ??
+        parsed.data.shift,
+      sourceRow: line.row,
+    });
   }
   if (!rows.length || rows.length > 5000)
     throw new AppError(
@@ -168,24 +183,11 @@ export async function parseSchoolFile(
     ],
   };
 }
-export function schoolIssues(row: {
-  document: string;
-  grade: string;
-  section: string;
-  shift: string | null;
-  enrollment: string;
-  enrollmentApproved?: boolean;
-  excluded?: boolean;
-}) {
+export function schoolIssues(row: { document: string; excluded?: boolean }) {
   if (row.excluded) return [];
   return [
     !/^\d{8}$/.test(row.document) &&
-      "Documento pendiente de revisión: se requieren ocho dígitos de DNI.",
-    !/^[1-6]$/.test(row.grade) && "Grado pendiente de revisión.",
-    !row.section.trim() && "Falta la sección.",
-    row.enrollment !== "DEFINITIVA" &&
-      !row.enrollmentApproved &&
-      "El comité debe resolver el estado de matrícula.",
+      "Sin DNI válido de ocho dígitos: no puede votar hasta corregirlo.",
   ].filter(Boolean) as string[];
 }
 export const schoolHeaders = [

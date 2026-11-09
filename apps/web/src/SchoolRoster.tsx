@@ -10,6 +10,7 @@ import {
   downloadText,
   csvCell,
   dateFormat,
+  shiftLabel,
   readBase64,
 } from "./lib";
 
@@ -33,9 +34,11 @@ function SchoolRosterScreen() {
   const [previewPage, setPreviewPage] = useState(0);
   const [form, setForm] = useState<any>(),
     [reason, setReason] = useState(""),
-    [publish, setPublish] = useState(false),
-    [updateProfiles, setUpdateProfiles] = useState(false);
-  const load = async () => setData(await api(root));
+    [shiftFilter, setShiftFilter] = useState("");
+  const load = async () => {
+    if (editable) await api(root + "/register", { method: "POST", body: {} });
+    setData(await api(root));
+  };
   useEffect(() => {
     if (can("roster:write")) void load().catch((e) => setError(e.message));
   }, []);
@@ -53,7 +56,8 @@ function SchoolRosterScreen() {
   }
   const rows = (data?.rows || []).filter(
     (r: any) =>
-      (!pendingOnly || r.issues.length) &&
+      (!pendingOnly || r.issues.length || (!r.publishedAt && !r.excluded)) &&
+      (!shiftFilter || (r.shift || "UNKNOWN") === shiftFilter) &&
       `${r.displayName} ${r.studentCode} ${r.section}`
         .toLocaleLowerCase()
         .includes(query.toLocaleLowerCase()),
@@ -94,7 +98,7 @@ function SchoolRosterScreen() {
     <>
       <PageTitle
         title="Padrón del colegio"
-        description="Carga el padrón y resuelve únicamente los datos pendientes. No necesitas asignar ni verificar turnos para votar con DNI."
+        description="Los estudiantes se registran automáticamente al importar. Los turnos se separan según el grado y la sección, sin limitar el acceso a votar."
         action={
           editable && (
             <button
@@ -117,14 +121,22 @@ function SchoolRosterScreen() {
             <strong>{data.total}</strong> registrados
           </span>
           <span>
-            <strong>{data.pending}</strong> pendientes de revisión
+            <strong>{data.eligible}</strong> habilitados para votar
           </span>
           <span>
-            <strong>{data.ready}</strong> listos para confirmar
+            <strong>{data.unavailable}</strong> sin DNI habilitado
           </span>
           <span>
-            <strong>{data.published}</strong> confirmados
+            <strong>{data.shifts.MANANA}</strong> mañana
           </span>
+          <span>
+            <strong>{data.shifts.TARDE}</strong> tarde
+          </span>
+          {data.shifts.UNKNOWN > 0 && (
+            <span>
+              <strong>{data.shifts.UNKNOWN}</strong> sin turno identificado
+            </span>
+          )}
           <span>
             <strong>{data.excluded}</strong> excluidos con motivo
           </span>
@@ -196,8 +208,9 @@ function SchoolRosterScreen() {
             <div role="region" aria-label="Vista previa del padrón">
               <h3>{preview.total} estudiantes encontrados</h3>
               <p>
-                {preview.pending} necesitan revisión. Guardar esta carga crea un
-                borrador; todavía no habilita votos.
+                Al importar se registrarán automáticamente.{" "}
+                {preview.unavailable} registros tienen un DNI faltante, inválido
+                o repetido que impide habilitarlos para votar.
               </p>
               {preview.warnings.map((w: string) => (
                 <p key={w}>{w}</p>
@@ -209,7 +222,8 @@ function SchoolRosterScreen() {
                       <th>Fila</th>
                       <th>Estudiante</th>
                       <th>Grado y sección</th>
-                      <th>Revisión</th>
+                      <th>Turno</th>
+                      <th>Datos del documento</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -222,7 +236,10 @@ function SchoolRosterScreen() {
                           <td>
                             {r.grade}° {r.section}
                           </td>
-                          <td>{r.issues.join(" ") || "Listo"}</td>
+                          <td>
+                            {r.shift ? shiftLabel(r.shift) : "Sin clasificar"}
+                          </td>
+                          <td>{r.issues.join(" ") || "DNI válido"}</td>
                         </tr>
                       ))}
                   </tbody>
@@ -268,12 +285,12 @@ function SchoolRosterScreen() {
                     setMessage(
                       r.alreadyImported
                         ? "La carga ya estaba registrada; no se duplicó."
-                        : `${r.count} estudiantes guardados para revisión.`,
+                        : `${r.count} estudiantes registrados automáticamente.`,
                     );
                   })
                 }
               >
-                {busy ? "Guardando…" : "Guardar en borrador"}
+                {busy ? "Importando…" : "Importar padrón"}
               </button>
             </div>
           )}
@@ -282,25 +299,12 @@ function SchoolRosterScreen() {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Revisar estudiantes</h2>
+            <h2>Estudiantes registrados</h2>
             <p>
               Los documentos completos se muestran solo al abrir una corrección
               autorizada.
             </p>
           </div>
-          {editable && data?.rows.some((r: any) => !r.publishedAt) && (
-            <button
-              className="button"
-              disabled={busy || data.pending > 0}
-              onClick={() => {
-                setPublish(true);
-                setReason("");
-                setUpdateProfiles(false);
-              }}
-            >
-              Confirmar padrón revisado
-            </button>
-          )}
         </div>
         <Field label="Buscar por nombre, matrícula o sección">
           <input
@@ -311,6 +315,20 @@ function SchoolRosterScreen() {
             }}
           />
         </Field>
+        <Field label="Filtrar estudiantes por turno">
+          <select
+            value={shiftFilter}
+            onChange={(e) => {
+              setShiftFilter(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="">Todos los turnos</option>
+            <option value="MANANA">Mañana</option>
+            <option value="TARDE">Tarde</option>
+            <option value="UNKNOWN">Sin clasificar</option>
+          </select>
+        </Field>
         <label className="roster-check">
           <input
             type="checkbox"
@@ -320,7 +338,7 @@ function SchoolRosterScreen() {
               setPage(0);
             }}
           />
-          Mostrar pendientes de revisión
+          Mostrar registros sin DNI habilitado
         </label>
         <button
           className="button text"
@@ -353,6 +371,7 @@ function SchoolRosterScreen() {
               <tr>
                 <th>Estudiante</th>
                 <th>Grado / sección</th>
+                <th>Turno</th>
                 <th>Estado</th>
                 <th>Acción</th>
               </tr>
@@ -369,12 +388,14 @@ function SchoolRosterScreen() {
                   <td>
                     {r.grade}° {r.section}
                   </td>
+                  <td>{r.shift ? shiftLabel(r.shift) : "Sin clasificar"}</td>
                   <td>
                     {r.excluded
                       ? "Excluido con motivo"
                       : r.publishedAt
-                        ? "Confirmado"
-                        : r.issues.join(" ") || "Listo para confirmar"}
+                        ? "Registrado · habilitado para votar"
+                        : "Registrado · " +
+                          (r.issues.join(" ") || "DNI no habilitado")}
                   </td>
                   <td>
                     {editable && !r.publishedAt && (
@@ -388,7 +409,7 @@ function SchoolRosterScreen() {
                           })
                         }
                       >
-                        Revisar
+                        Corregir datos
                       </button>
                     )}
                   </td>
@@ -427,7 +448,7 @@ function SchoolRosterScreen() {
       </section>
       {form && (
         <Modal
-          title={form.id ? "Revisar registro" : "Registrar estudiante"}
+          title={form.id ? "Corregir datos" : "Registrar estudiante"}
           onClose={() => !busy && setForm(undefined)}
         >
           <form
@@ -458,7 +479,7 @@ function SchoolRosterScreen() {
                 setForm(undefined);
                 await load();
                 setMessage(
-                  "Registro guardado. Revisa los pendientes antes de confirmar el padrón.",
+                  "Registro guardado. El DNI válido se habilita automáticamente.",
                 );
               });
             }}
@@ -487,16 +508,6 @@ function SchoolRosterScreen() {
                 <label className="roster-check">
                   <input
                     type="checkbox"
-                    checked={form.enrollmentApproved}
-                    onChange={(e) =>
-                      setForm({ ...form, enrollmentApproved: e.target.checked })
-                    }
-                  />
-                  El comité autorizó esta matrícula para participar.
-                </label>
-                <label className="roster-check">
-                  <input
-                    type="checkbox"
                     checked={form.excluded}
                     onChange={(e) =>
                       setForm({ ...form, excluded: e.target.checked })
@@ -520,54 +531,6 @@ function SchoolRosterScreen() {
             </button>
             {error && <Notice>{error}</Notice>}
           </form>
-        </Modal>
-      )}
-      {publish && (
-        <Modal
-          title="Confirmar padrón revisado"
-          onClose={() => !busy && setPublish(false)}
-        >
-          <p>
-            Se incorporarán {data.ready} estudiantes habilitados. Los registros
-            excluidos conservarán su motivo. Después de confirmar, sus datos de
-            inscripción quedarán fijados para esta elección.
-          </p>
-          <label className="roster-check">
-            <input
-              type="checkbox"
-              checked={updateProfiles}
-              onChange={(e) => setUpdateProfiles(e.target.checked)}
-            />
-            Autorizo actualizar los datos institucionales que cambiaron,
-            conservando las elecciones anteriores.
-          </label>
-          <Field label="Referencia de revisión del padrón">
-            <textarea
-              value={reason}
-              maxLength={300}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </Field>
-          <button
-            className="button"
-            disabled={busy || reason.trim().length < 10}
-            onClick={() =>
-              void run(async () => {
-                const r = await api(root + "/publish", {
-                  method: "POST",
-                  body: { reason, updateProfiles },
-                });
-                setPublish(false);
-                await load();
-                setMessage(
-                  `${r.count} estudiantes habilitados para la elección.`,
-                );
-              })
-            }
-          >
-            Confirmar incorporación
-          </button>
-          {error && <Notice>{error}</Notice>}
         </Modal>
       )}
     </>

@@ -1,10 +1,10 @@
 # SIVEE · Votación presencial escolar
 
-La votación usa solamente DNI, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con revisión y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
+La votación usa solamente DNI, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con registro automático, separación por turno y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
 
 **Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
 
-**Desarrollo local:** `npm install` y `npm run dev` desde la raíz, con Docker Desktop iniciado. Para ensayar el nuevo flujo crea una elección desde Configuración, confirma el padrón y las listas, prepara la elección y abre el turno. Los estudiantes acceden a `/votar` e ingresan su DNI.
+**Desarrollo local:** `npm install` y `npm run dev` desde la raíz, con Docker Desktop iniciado. Para ensayar el nuevo flujo crea una elección desde Configuración, importa el padrón y registra las listas, prepara la elección y abre el turno. Los estudiantes acceden a `/votar` e ingresan su DNI.
 
 React + Vite + TypeScript + Tailwind, Express, PostgreSQL 17, Prisma y eventos SSE. Incluye el entorno de ensayo del SDD del 5 de noviembre de 2026 y la nueva modalidad presencial.
 

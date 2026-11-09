@@ -6,6 +6,7 @@ import { validateListLogo } from "./list-logo.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { schoolRoster } from "./school-roster.js";
+import { registerSchoolRecords } from "./school-registration.js";
 import { issueSession, adminAuth, permit, cookieOptions } from "./auth.js";
 import {
   AppError,
@@ -333,6 +334,8 @@ admin.post(
     const result = await db.$transaction(async (tx) => {
       const e = await lockElection(tx, String(req.params.id), true);
       requireState(e.state === "BORRADOR");
+      if (e.authMode === "DESK")
+        await registerSchoolRecords(tx, e, res.locals.admin.id);
       const lists = await tx.electoralList.count({
         where: { electionId: e.id, active: true },
       });
@@ -354,14 +357,6 @@ admin.post(
           credentials >= p.eligible,
           "Hay electores sin credenciales vigentes.",
         );
-      else {
-        requireState(
-          (await tx.schoolDraft.count({
-            where: { electionId: e.id, publishedAt: null },
-          })) === 0,
-          "Confirma o resuelve los registros del borrador escolar antes de preparar.",
-        );
-      }
       if (e.mode === "OFICIAL")
         requireState(
           (process.env.INSTITUTIONAL_APPROVAL_REFERENCE?.trim().length || 0) >

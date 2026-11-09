@@ -1653,6 +1653,8 @@ const auditLabels: Record<string, string> = {
   DNI_SESSION_CREATED: "Acceso iniciado con DNI",
   ADMISSION_CANCELLED: "Acceso desde cabina cancelado",
   SCHOOL_ROSTER_STAGED: "Archivo escolar recibido para revisión",
+  SCHOOL_ROSTER_IMPORTED: "Padrón escolar importado",
+  SCHOOL_ROSTER_REGISTERED: "Estudiantes registrados automáticamente",
   SCHOOL_ROSTER_CORRECTED: "Registro escolar corregido",
   SCHOOL_SHIFT_ASSIGNED: "Turno asignado explícitamente",
   SCHOOL_ROSTER_CONFIRMED: "Padrón escolar confirmado",

@@ -6,6 +6,7 @@ import { spawn, execFileSync, type ChildProcess } from "node:child_process";
 import { schoolFixture } from "../tests/school-fixture";
 import { logoPng } from "../tests/list-logo.fixture";
 import AxeBuilder from "@axe-core/playwright";
+import ExcelJS from "exceljs";
 
 // A separate database/server protects the presentation's existing roster and codes.
 const origin = "http://localhost:5053";
@@ -172,27 +173,48 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
   await expect(previewRows.last()).toContainText("Estudiante CSV 49");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   const fixture = await schoolFixture(2, false);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(Buffer.from(fixture.file.base64, "base64") as any);
+  workbook.worksheets[0].getCell("C13").value = "HONESTIDAD";
+  workbook.worksheets[0].getCell("C14").value = "EMPATÍA";
   await page.getByLabel("Archivo institucional").setInputFiles({
     name: "sintetico.xlsx",
     mimeType:
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buffer: Buffer.from(fixture.file.base64, "base64"),
+    buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
   });
   await expect(
     page.getByRole("heading", { name: "2 estudiantes encontrados" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Guardar en borrador" }).click();
-  await expect(page.getByLabel("Grupos a asignar")).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Confirmar padrón revisado", exact: true })
-    .click();
-  await page
-    .getByLabel("Referencia de revisión del padrón")
-    .fill("Padrón sintético revisado para el ensayo");
-  await page.getByRole("button", { name: "Confirmar incorporación" }).click();
+  await page.getByRole("button", { name: "Importar padrón" }).click();
   await expect(
-    page.getByText("2 estudiantes habilitados para la elección."),
+    page.getByText("2 estudiantes registrados automáticamente."),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Confirmar padrón revisado",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Registrado · habilitado para votar", { exact: true }),
+  ).toHaveCount(2);
+  await expect(page.getByLabel("Filtrar estudiantes por turno")).toBeVisible();
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("MANANA");
+  await expect(
+    page.getByText("Estudiante Sintético 0", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Estudiante Sintético 1", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("TARDE");
+  await expect(
+    page.getByText("Estudiante Sintético 1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Estudiante Sintético 0", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "artifacts/official-roster.png",
