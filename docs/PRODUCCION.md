@@ -37,6 +37,10 @@ La referencia de autorización se configura dentro de cada elección, mientras e
 
 Este cambio no requiere una nueva migración: usa el registro existente de referencias de aprobación y la auditoría. Cada modificación registra quién la hizo y los valores anterior/nuevo. No se copia entre elecciones ni se toma de la variable antigua `INSTITUTIONAL_APPROVAL_REFERENCE`; si existe en Railway, ya no se utiliza. No cambia las aprobaciones separadas del cierre ni de la publicación de resultados.
 
+## Preparar la elección real después de las pruebas
+
+Conserva el ensayo y crea una elección nueva con cero votos desde **Configuración → Nueva elección**. Debes volver a importar el padrón, habilitar los extranjeros por matrícula y registrar las listas y logos; esta acción no copia automáticamente los datos. Sigue la [guía para preparar el viernes después del ensayo](PREPARAR_ELECCION_TRAS_ENSAYO.md) antes de preparar o abrir la jornada real.
+
 ## Si Railway usa Railpack
 
 `npm run build` genera explícitamente Prisma antes de comprobar TypeScript y compilar. Esto también permite compilar cuando Railpack instaló dependencias antes de copiar `prisma.config.ts`. No dependas del postinstall de `@prisma/client` para encontrar el esquema en `apps/api/prisma`.
