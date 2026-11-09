@@ -1651,6 +1651,9 @@ const auditLabels: Record<string, string> = {
   IDENTITY_VERIFIED: "Identidad cotejada por la mesa",
   DNI_ADMISSION_CREATED: "Acceso iniciado con DNI en cabina",
   DNI_SESSION_CREATED: "Acceso iniciado con DNI",
+  FOREIGN_SESSION_CREATED: "Acceso de estudiante extranjero con matrícula",
+  FOREIGN_STUDENTS_DECLARED:
+    "Estudiantes declarados extranjeros y habilitados con matrícula",
   ADMISSION_CANCELLED: "Acceso desde cabina cancelado",
   SCHOOL_ROSTER_STAGED: "Archivo escolar recibido para revisión",
   SCHOOL_ROSTER_IMPORTED: "Padrón escolar importado",

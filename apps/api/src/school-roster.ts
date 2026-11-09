@@ -48,6 +48,11 @@ schoolRoster.get(root, permit("roster:write"), async (req, res) => {
     data: {
       rows: rows.map(({ document, ...r }) => ({
         ...r,
+        foreignCandidate:
+          !r.isForeign &&
+          !r.publishedAt &&
+          !r.excluded &&
+          !/^\d{8}$/.test(document),
         document: document ? "••••" + document.slice(-4) : "Sin documento",
       })),
       history,
@@ -57,6 +62,7 @@ schoolRoster.get(root, permit("roster:write"), async (req, res) => {
       }),
       unavailable: rows.filter((r) => !r.publishedAt && !r.excluded).length,
       excluded: rows.filter((r) => r.excluded).length,
+      foreign: rows.filter((r) => r.isForeign).length,
       shifts: {
         MANANA: rows.filter((r) => r.shift === "MANANA").length,
         TARDE: rows.filter((r) => r.shift === "TARDE").length,
@@ -112,6 +118,78 @@ schoolRoster.post(
         })),
       },
     });
+  },
+);
+schoolRoster.post(
+  root + "/foreign-students",
+  permit("roster:write"),
+  async (req, res) => {
+    const { rowIds, reason } = z
+      .object({
+        rowIds: z
+          .array(z.uuid())
+          .min(1)
+          .max(5000)
+          .refine((ids) => new Set(ids).size === ids.length),
+        reason: reasonSchema,
+      })
+      .strict()
+      .parse(req.body);
+    const result = await db.$transaction(
+      async (tx) => {
+        const e = await lockElection(tx, String(req.params.id), true);
+        requireState(
+          e.authMode === "DESK" &&
+            ["BORRADOR", "PREPARADA", "EN_CURSO", "PAUSADA"].includes(e.state),
+          "La elección no admite habilitar estos registros.",
+        );
+        const rows = await tx.schoolDraft.findMany({
+          where: { electionId: e.id, id: { in: rowIds } },
+        });
+        requireState(
+          rows.length === rowIds.length &&
+            rows.every(
+              (r) =>
+                !r.excluded &&
+                (r.isForeign ||
+                  (!r.publishedAt &&
+                    !/^\d{8}$/.test(decryptDocument(r.documentEncrypted)))),
+            ),
+          "Selecciona únicamente los registros ya cargados sin DNI habilitado.",
+        );
+        const changed = await tx.schoolDraft.updateMany({
+          where: { electionId: e.id, id: { in: rowIds }, isForeign: false },
+          data: { isForeign: true, reason, version: { increment: 1 } },
+        });
+        const registered = await registerSchoolRecords(
+          tx,
+          e,
+          res.locals.admin.id,
+          rowIds,
+        );
+        if (changed.count || registered.count) {
+          await tx.election.update({
+            where: { id: e.id },
+            data: { version: { increment: 1 } },
+          });
+          await audit(
+            tx,
+            res.locals.admin.id,
+            e.id,
+            "FOREIGN_STUDENTS_DECLARED",
+            {
+              rowIds,
+              count: changed.count,
+              registered: registered.count,
+              reason,
+            },
+          );
+        }
+        return { classified: changed.count, registered: registered.count };
+      },
+      { timeout: 60000 },
+    );
+    res.json({ data: result });
   },
 );
 schoolRoster.post(

@@ -10,6 +10,7 @@ import {
 import {
   AppError,
   dniLookup,
+  foreignLookup,
   passwordHash,
   verifyPassword,
 } from "./security.js";
@@ -38,7 +39,8 @@ const authLimit = rateLimit({
     }),
 });
 voter.post("/dni-sessions", authLimit, async (req, res) => {
-  const { electionId, dni } = voterDniLoginSchema.parse(req.body);
+  const input = voterDniLoginSchema.parse(req.body);
+  const { electionId } = input;
   const data = await db.$transaction(async (tx) => {
     const e = await lockElection(tx, electionId, true);
     if (e.authMode !== "DESK")
@@ -47,11 +49,31 @@ voter.post("/dni-sessions", authLimit, async (req, res) => {
         "AUTH_FAILED",
         "Esta simulación utiliza documento y código de acceso.",
       );
+    let lookup: string;
+    if ("studentCode" in input) {
+      const matches = await tx.schoolDraft.findMany({
+        where: {
+          electionId,
+          studentCode: { equals: input.studentCode, mode: "insensitive" },
+          isForeign: true,
+          excluded: false,
+          publishedAt: { not: null },
+        },
+        take: 2,
+      });
+      if (matches.length !== 1)
+        throw new AppError(
+          403,
+          "AUTH_FAILED",
+          "La matrícula no está habilitada para acceso de estudiantes extranjeros.",
+        );
+      lookup = foreignLookup(matches[0].studentCode);
+    } else lookup = dniLookup(input.dni);
     const student = await tx.student.findUnique({
       where: {
         institutionId_dniLookup: {
           institutionId: e.institutionId,
-          dniLookup: dniLookup(dni),
+          dniLookup: lookup,
         },
       },
     });
@@ -64,7 +86,7 @@ voter.post("/dni-sessions", authLimit, async (req, res) => {
       throw new AppError(
         403,
         "AUTH_FAILED",
-        "El DNI no está habilitado o ya registró su voto. Consulta al comité si necesitas ayuda.",
+        "La identificación no está habilitada o ya registró su voto. Consulta al comité si necesitas ayuda.",
       );
     if (!votingAvailable(e, p.shift))
       throw new AppError(
@@ -87,9 +109,17 @@ voter.post("/dni-sessions", authLimit, async (req, res) => {
       { electionId, studentId: student.id },
       tx,
     );
-    await audit(tx, null, electionId, "DNI_SESSION_CREATED", {
-      studentId: student.id,
-    });
+    await audit(
+      tx,
+      null,
+      electionId,
+      "studentCode" in input
+        ? "FOREIGN_SESSION_CREATED"
+        : "DNI_SESSION_CREATED",
+      {
+        studentId: student.id,
+      },
+    );
     return {
       ...session,
       electionId,

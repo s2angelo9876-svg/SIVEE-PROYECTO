@@ -1,6 +1,6 @@
 # SIVEE presencial: instalación y jornada oficial
 
-El alumno abre `/votar`, ingresa solamente su DNI y accede a la cédula cuando la jornada tiene un horario de votación abierto. No se registran equipos, asignan responsables ni solicitan códigos o aprobaciones de mesa. Funciona desde cualquier dispositivo con el enlace. Conocer un DNI ajeno podría permitir suplantar al estudiante: el sistema comprueba elegibilidad y voto único, no la identidad de quien usa el documento. El colegio debe organizar la supervisión presencial de la jornada.
+El alumno abre `/votar`, usa su DNI o la matrícula habilitada para estudiantes extranjeros y accede a la cédula cuando la jornada tiene un horario de votación abierto. No se registran equipos, asignan responsables ni solicitan códigos o aprobaciones de mesa. Funciona desde cualquier dispositivo con el enlace. Conocer un DNI ajeno podría permitir suplantar al estudiante: el sistema comprueba elegibilidad y voto único, no la identidad de quien usa el documento. El colegio debe organizar la supervisión presencial de la jornada.
 
 ## Desplegar en Railway
 
@@ -43,7 +43,7 @@ El Excel recibido contiene 1742 estudiantes. Según la nomenclatura proporcionad
 
 1. En Padrón electoral selecciona el `.xlsx` o CSV institucional. Revisa si deseas la vista previa paginada de 50 en 50 y pulsa **Importar padrón**. No existe Guardar en borrador ni una segunda confirmación por alumno o por lote.
 2. Todos los registros quedan en el listado. Los DNI válidos y únicos se inscriben automáticamente para votar, incluyendo las matrículas EN PROCESO del archivo; ya no se pide aprobación individual. Los datos se cifran y los documentos completos solo se muestran al abrir una corrección autorizada.
-3. El archivo concreto tiene 20 documentos vacíos y 5 distintos de un DNI de ocho dígitos: se guardan los 1742 registros y se habilitan inicialmente **1717**, sin inventar documentos. Estos 25 se muestran como registrados sin DNI habilitado, no como pendientes de confirmación. Corregir el documento antes de preparar habilita automáticamente al alumno. Un DNI repetido no genera inscripciones adicionales y no bloquea la importación del resto.
+3. El archivo concreto tiene 20 documentos vacíos y 5 distintos de un DNI de ocho dígitos: inicialmente se habilitan **1717**. El colegio ha identificado a esos **25** como extranjeros y ha elegido el código de matrícula existente para su acceso. Tras aplicar la migración y habilitarlos con la acción descrita abajo, los **1742** pueden participar sin inventar DNI ni generar códigos nuevos. Un documento faltante no implica por sí mismo que el alumno sea extranjero; la clasificación es explícita y auditada.
 4. La separación automática usa grado y sección: 1.º A–G mañana/H–M tarde; 2.º A–F mañana/G–L tarde; 3.º a 5.º A–F mañana/G–K tarde. 3.º Gabriel García Márquez también corresponde a tarde. El filtro del listado permite ver ambos grupos o los no clasificados. Una sección desconocida no se asigna por suposición ni impide votar.
 5. Registrar estudiante permite incorporar individualmente un alumno omitido antes de preparar, sin confirmación posterior. Los datos ya habilitados conservan la protección de su inscripción; las filas con documento no utilizable se pueden corregir con motivo auditado y control de versión.
 6. Las cargas de versiones anteriores se sincronizan automáticamente al abrir el padrón o preparar la elección, sin volver a importar el Excel. No se modifica una elección preparada o en curso. La importación y la sincronización son idempotentes y quedan auditadas. Las identidades de otras elecciones conservan sus inscripciones históricas.
@@ -69,7 +69,23 @@ Este cambio utiliza el campo existente de símbolo y no requiere migración de b
 
 Los horarios de mañana y tarde controlan la apertura general: cualquier DNI habilitado puede votar en cualquiera de ellos. Los turnos del padrón se clasifican automáticamente como referencia, pero no bloquean acceso, cédula ni emisión del voto.
 
-Esta actualización no requiere migraciones ni ejecutar operaciones. Se conserva el valor interno `DESK` para compatibilidad con elecciones existentes. Las cabinas, responsables y admisiones anteriores quedan como historial y ya no condicionan el acceso. Si había una sesión antigua abierta, recarga la página e ingresa de nuevo el DNI. Los marcadores `/admin/mesa` y `/cabina/activar` redirigen a Jornada electoral y `/votar`, respectivamente.
+El voto directo se aplica a las elecciones existentes. El soporte de estudiantes extranjeros sí requiere la migración aditiva indicada a continuación. Se conserva el valor interno `DESK` para compatibilidad con elecciones existentes. Las cabinas, responsables y admisiones anteriores quedan como historial y ya no condicionan el acceso. Si había una sesión antigua abierta, recarga la página e ingresa de nuevo el DNI. Los marcadores `/admin/mesa` y `/cabina/activar` redirigen a Jornada electoral y `/votar`, respectivamente.
+
+## Estudiantes extranjeros: matrícula existente
+
+Los 25 registros indicados por el colegio tienen códigos de matrícula únicos de 14 dígitos en el Excel. El acceso es **individual**, seleccionando «Extranjero · código de matrícula» e ingresando ese código; la palabra «extranjero» sola no identifica a una persona ni permite votar. No se emiten códigos de acceso nuevos, no se inventa un DNI y no se guarda una nacionalidad específica.
+
+### Actualizar Railway sin reinicializar
+
+1. En el servicio temporal **operaciones**, conectado a este repositorio y rama `main`, selecciona **Settings → Config-as-code → Railway Config File → `/infra/railway.migrate.json`**. Mantén la raíz del repositorio como raíz del servicio. Ese archivo ejecuta únicamente `node dist/ops/migrate.js`, sin reinicios ni healthcheck HTTP.
+2. Configura las dos referencias de [railway.migrate.env.example](../infra/railway.migrate.env.example): `DATABASE_URL` del servicio SIVEE y `MIGRATION_DATABASE_URL` del propietario de Postgres. Deben apuntar a la misma base y host. No necesita variables INITIAL_ADMIN ni RECOVERY; no vuelvas a usar `railway.init.json` ni el inicializador.
+3. Despliega operaciones y comprueba «Migración aplicada: 202611090001_foreign_students» y finalización correcta. La migración solo añade `isForeign=false` a `school_drafts`; conserva alumnos, cuentas, votos y datos existentes. Repetir la migración es seguro por su registro de checksums.
+4. Despliega SIVEE-PROYECTO con la misma versión y recarga con Ctrl+Shift+R. Si la API se actualizó automáticamente antes, aplica primero la migración y vuelve a desplegarla; el padrón necesita la columna nueva.
+5. En Padrón electoral pulsa **Habilitar 25 como extranjeros con matrícula**. La operación usa los registros ya importados, exige permiso de padrón y queda auditada. Puedes deshabilitar/eliminar el servicio temporal de operaciones tras completarla.
+
+La acción admite BORRADOR, PREPARADA, EN_CURSO y PAUSADA, únicamente para registros existentes sin DNI válido y todavía sin inscripción. No permite modificar votantes ya habilitados ni añadir filas nuevas después de preparar. Las llamadas repetidas no crean inscripciones adicionales; tras cerrar la elección se rechaza la habilitación. Al clasificar durante la jornada aumenta el total de habilitados y queda registrada la modificación.
+
+Las matrículas se consultan con un hash de búsqueda separado del espacio de DNI. El alumno extranjero mantiene una sola identidad de votación, con la misma caducidad de sesión, pausas, horarios y bloqueo de voto duplicado. Solo los registros marcados explícitamente como extranjeros pueden usar este acceso; una matrícula de un estudiante nacional no lo habilita. Para un alta individual de extranjero antes de preparar, utiliza su matrícula existente y marca la opción correspondiente; no se genera una matrícula nueva.
 
 ## Incidentes y recuperación
 

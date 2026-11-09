@@ -12,6 +12,8 @@ export const dniLookup = (value: string) =>
     .update(value)
     .digest("hex");
 export const newToken = () => crypto.randomBytes(32).toString("base64url");
+export const foreignLookup = (studentCode: string) =>
+  dniLookup("FOREIGN:" + studentCode.trim().toUpperCase());
 export const csrfFor = (token: string) =>
   crypto.createHmac("sha256", config.CSRF_KEY).update(token).digest("hex");
 export const safeEqual = (a: string, b: string) =>

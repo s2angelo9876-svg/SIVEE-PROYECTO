@@ -13,6 +13,7 @@ export const schoolRowSchema = z
     section: z.string().trim().max(100),
     shift: z.enum(["MANANA", "TARDE"]).nullable().default(null),
     enrollment: z.string().trim().max(60).default("DEFINITIVA"),
+    isForeign: z.boolean().default(false),
   })
   .strict();
 export type SchoolRow = z.infer<typeof schoolRowSchema> & { sourceRow: number };
@@ -183,8 +184,12 @@ export async function parseSchoolFile(
     ],
   };
 }
-export function schoolIssues(row: { document: string; excluded?: boolean }) {
-  if (row.excluded) return [];
+export function schoolIssues(row: {
+  document: string;
+  excluded?: boolean;
+  isForeign?: boolean;
+}) {
+  if (row.excluded || row.isForeign) return [];
   return [
     !/^\d{8}$/.test(row.document) &&
       "Sin DNI válido de ocho dígitos: no puede votar hasta corregirlo.",

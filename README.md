@@ -1,6 +1,6 @@
 # SIVEE · Votación presencial escolar
 
-La votación usa solamente DNI, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con registro automático, separación por turno y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
+La votación usa DNI o matrícula habilitada para estudiantes extranjeros, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con registro automático, separación por turno y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
 
 **Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
 
@@ -124,3 +124,5 @@ En Linux/macOS: `npm run build` y `WEB_ORIGIN=http://localhost:5000 npm start`. 
 ## Alcance de la entrega
 
 Esta entrega implementa el flujo de voto directo con DNI, además de conservar las simulaciones del SDD. No constituye una certificación de seguridad, autorización normativa ni despliegue oficial. Requiere validación del Comité, TLS y prueba en infraestructura final antes de usar datos reales. No implementa anonimato criptográfico verificable ni garantiza RPO=0 frente a pérdida física del servidor. La puesta en servicio y los requisitos institucionales están en [PRODUCCION.md](docs/PRODUCCION.md); `docs/IMPLEMENTACION.md` conserva la trazabilidad de la entrega anterior.
+
+El soporte de estudiantes extranjeros requiere aplicar la migración aditiva `202611090001_foreign_students` antes de desplegar la API. Usa `infra/railway.migrate.json` en el servicio temporal de operaciones; no ejecutes de nuevo el inicializador. Después habilita los registros extranjeros del padrón para que usen su matrícula existente. Instrucciones en [Producción](docs/PRODUCCION.md#estudiantes-extranjeros-matrícula-existente).

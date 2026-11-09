@@ -3,6 +3,7 @@ import { logoPng, logoData } from "./list-logo.fixture";
 import { describe, it, expect } from "vitest";
 import {
   voterLoginSchema,
+  voterDniLoginSchema,
   listSchema,
   voteSchema,
   electoralOutcome,
@@ -12,10 +13,45 @@ import {
 } from "../packages/shared/domain";
 import { windowAvailable, votingAvailable } from "../apps/api/src/services";
 import { parseRoster } from "../apps/api/src/roster-files";
-import { canonical, digest } from "../apps/api/src/security";
+import {
+  canonical,
+  digest,
+  dniLookup,
+  foreignLookup,
+} from "../apps/api/src/security";
 import { totp } from "../apps/api/src/mfa";
 const electionId = "11111111-1111-4111-8111-111111111111";
 const listId = "22222222-2222-4222-8222-222222222222";
+it("matrícula extranjera requiere selección explícita y no colisiona con DNI", () => {
+  expect(
+    voterDniLoginSchema.safeParse({
+      electionId,
+      identityType: "EXTRANJERO",
+      studentCode: "MATRICULA-01",
+    }).success,
+  ).toBe(true);
+  expect(
+    voterDniLoginSchema.safeParse({ electionId, studentCode: "MATRICULA-01" })
+      .success,
+  ).toBe(false);
+  expect(
+    voterDniLoginSchema.safeParse({
+      electionId,
+      identityType: "EXTRANJERO",
+      studentCode: " ",
+    }).success,
+  ).toBe(false);
+  expect(
+    voterDniLoginSchema.safeParse({
+      electionId,
+      identityType: "EXTRANJERO",
+      studentCode: "01",
+      dni: "00000001",
+    }).success,
+  ).toBe(false);
+  expect(foreignLookup("00000001")).not.toBe(dniLookup("00000001"));
+  expect(foreignLookup(" matricula-01 ")).toBe(foreignLookup("MATRICULA-01"));
+});
 describe("identidad y cédula estrictas", () => {
   it.each(["", "1234567", "123456789", "abcdefgh"])(
     "rechaza DNI inválido %s",

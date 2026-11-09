@@ -1,12 +1,21 @@
 import { z } from "zod";
 export const shiftSchema = z.enum(["MANANA", "TARDE"]);
 export const uuid = z.uuid();
-export const voterDniLoginSchema = z
-  .object({
-    electionId: uuid,
-    dni: z.string().regex(/^\d{8}$/),
-  })
-  .strict();
+export const voterDniLoginSchema = z.union([
+  z
+    .object({
+      electionId: uuid,
+      dni: z.string().regex(/^\d{8}$/),
+    })
+    .strict(),
+  z
+    .object({
+      electionId: uuid,
+      identityType: z.literal("EXTRANJERO"),
+      studentCode: z.string().trim().min(1).max(60),
+    })
+    .strict(),
+]);
 export const voterLoginSchema = z
   .object({
     electionId: uuid,

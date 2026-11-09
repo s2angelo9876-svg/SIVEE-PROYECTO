@@ -82,6 +82,7 @@ app.get("/api/v1/branding/crest", async (_req, res) => {
 app.get("/api/v1/health/ready", async (_req, res) => {
   try {
     await db.$queryRaw`SELECT 1`;
+    await db.$queryRaw`SELECT "isForeign" FROM school_drafts LIMIT 0`;
     res.json({
       data: { status: "ready", database: "connected", mode: config.SIVEE_ENV },
     });

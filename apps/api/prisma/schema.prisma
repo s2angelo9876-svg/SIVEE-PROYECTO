@@ -220,6 +220,7 @@ model SchoolDraft {
   shift String?
   enrollment String
   enrollmentApproved Boolean @default(false)
+  isForeign Boolean @default(false)
   excluded Boolean @default(false)
   reason String @default("")
   version Int @default(1)

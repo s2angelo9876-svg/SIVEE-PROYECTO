@@ -215,6 +215,30 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
     page.getByText("Estudiante Sintético 0", { exact: true }),
   ).toHaveCount(0);
   await page.getByLabel("Filtrar estudiantes por turno").selectOption("");
+  await api(root + "/roster/school/import", {
+    requestId: crypto.randomUUID(),
+    individual: {
+      studentCode: "EXTRANJERO-01",
+      document: "",
+      displayName: "Estudiante extranjero de ensayo",
+      grade: "3",
+      section: "GABRIEL GARCÍA MÁRQUEZ",
+      enrollment: "DEFINITIVA",
+    },
+  });
+  await page.reload();
+  await page
+    .getByRole("button", {
+      name: "Habilitar 1 como extranjeros con matrícula",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(/Extranjero · matrícula EXTRANJERO-01/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Habilitar 1 como extranjeros/ }),
+  ).toHaveCount(0);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "artifacts/official-roster.png",
@@ -347,6 +371,54 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
     await expect(
       voter.getByRole("heading", { name: /Gracias por/ }),
     ).toBeVisible();
+    const foreignContext = await browser.newContext({ baseURL: origin });
+    try {
+      const foreignVoter = await foreignContext.newPage();
+      foreignVoter.on("pageerror", (e) => errors.push(e.message));
+      await foreignVoter.goto("/votar");
+      await foreignVoter
+        .getByLabel("Tipo de identificación")
+        .selectOption("EXTRANJERO");
+      await foreignVoter
+        .getByLabel("Código de matrícula", { exact: true })
+        .fill("EXTRANJERO-01");
+      expect(
+        (await new AxeBuilder({ page: foreignVoter }).analyze()).violations,
+      ).toEqual([]);
+      await foreignVoter
+        .getByRole("button", { name: "Continuar con mi matrícula" })
+        .click();
+      await expect(
+        foreignVoter.getByRole("heading", {
+          name: "Estudiante extranjero de ensayo",
+        }),
+      ).toBeVisible();
+      await foreignVoter.getByRole("button", { name: "Sí, soy yo" }).click();
+      await foreignVoter.getByRole("radio", { name: /Lista 2:/ }).check();
+      await foreignVoter
+        .getByRole("button", { name: /Revisar mi elección/ })
+        .click();
+      await foreignVoter
+        .getByRole("button", { name: /Confirmar mi voto/ })
+        .click();
+      await expect(
+        foreignVoter.getByRole("heading", { name: /Gracias por/ }),
+      ).toBeVisible();
+      const duplicate = await foreignVoter.request.post(
+        origin + "/api/v1/voter/dni-sessions",
+        {
+          headers: { Origin: origin },
+          data: {
+            electionId: election.id,
+            identityType: "EXTRANJERO",
+            studentCode: "EXTRANJERO-01",
+          },
+        },
+      );
+      expect(duplicate.status()).toBe(403);
+    } finally {
+      await foreignContext.close();
+    }
     expect((await cabina.cookies()).some((c) => c.name === "sivee_booth")).toBe(
       false,
     );

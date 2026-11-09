@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import type { Tx } from "./services.js";
 import { audit } from "./services.js";
-import { dniLookup } from "./security.js";
+import { dniLookup, foreignLookup } from "./security.js";
 import { decryptDocument } from "./private-data.js";
 import { schoolIssues } from "./school-files.js";
 import { schoolShift } from "./school-shifts.js";
@@ -17,14 +17,27 @@ export async function schoolRecords(tx: Tx, electionId: string) {
     shift: schoolShift(row.grade, row.section) ?? row.shift,
   }));
   const frequencies = new Map<string, number>();
+  const foreignCodes = new Map<string, number>();
   for (const r of rows)
-    if (!r.excluded && r.document)
+    if (!r.excluded && !r.isForeign && r.document)
       frequencies.set(r.document, (frequencies.get(r.document) || 0) + 1);
+    else if (!r.excluded && r.isForeign) {
+      const code = r.studentCode.toUpperCase();
+      foreignCodes.set(code, (foreignCodes.get(code) || 0) + 1);
+    }
   return rows.map((r) => ({
     ...r,
     issues: [
       ...schoolIssues(r),
-      ...(!r.excluded && r.document && frequencies.get(r.document)! > 1
+      ...(r.isForeign &&
+      !r.excluded &&
+      foreignCodes.get(r.studentCode.toUpperCase())! > 1
+        ? ["Matrícula repetida; no se puede habilitar otra identidad."]
+        : []),
+      ...(!r.excluded &&
+      !r.isForeign &&
+      r.document &&
+      frequencies.get(r.document)! > 1
         ? ["DNI repetido; no se crea otra inscripción."]
         : []),
     ],
@@ -35,16 +48,25 @@ export async function registerSchoolRecords(
   tx: Tx,
   election: { id: string; institutionId: string; windows: { shift: string }[] },
   adminId: string,
+  recordIds?: string[],
 ) {
   const rows = await schoolRecords(tx, election.id);
   const candidates = rows.filter(
-    (r) => !r.publishedAt && !r.excluded && !r.issues.length,
+    (r) =>
+      !r.publishedAt &&
+      !r.excluded &&
+      !r.issues.length &&
+      (!recordIds || recordIds.includes(r.id)),
   );
   if (!candidates.length) return { count: 0 };
   const existing = await tx.student.findMany({
     where: {
       institutionId: election.institutionId,
-      dniLookup: { in: candidates.map((r) => dniLookup(r.document)) },
+      dniLookup: {
+        in: candidates.map((r) =>
+          r.isForeign ? foreignLookup(r.studentCode) : dniLookup(r.document),
+        ),
+      },
     },
     include: { participations: { where: { electionId: election.id } } },
   });
@@ -53,7 +75,9 @@ export async function registerSchoolRecords(
     participations = [],
     registeredIds: string[] = [];
   for (const r of candidates) {
-    const key = dniLookup(r.document),
+    const key = r.isForeign
+        ? foreignLookup(r.studentCode)
+        : dniLookup(r.document),
       old = byDni.get(key);
     if (old && !old.active) continue;
     const id = old?.id || crypto.randomUUID();

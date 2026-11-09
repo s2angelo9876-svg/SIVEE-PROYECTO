@@ -838,6 +838,194 @@ try {
     },
   );
   await check(
+    "25 extranjeros usan sus matrículas, con clasificación explícita, alta idempotente y voto único",
+    async () => {
+      const foreignElection = success(
+        await req(
+          "/admin/elections",
+          "POST",
+          {
+            name: "Elección con estudiantes extranjeros",
+            year: 2027,
+            scope: "Municipio escolar",
+            blankAllowed: true,
+            nullAllowed: true,
+            regulation: "Reglamento del ensayo extranjero",
+            contact: "Comité del ensayo",
+            shifts: ["MANANA"],
+          },
+          committee,
+        ),
+      );
+      const foreignRoot = `/admin/elections/${foreignElection.id}`;
+      const foreignFile = await schoolFixture(27, true);
+      success(
+        await req(
+          foreignRoot + school + "/import",
+          "POST",
+          foreignFile,
+          committee,
+        ),
+      );
+      let state = success(
+        await req(foreignRoot + school, "GET", undefined, committee),
+      );
+      assert.equal(state.eligible, 2);
+      assert.equal(state.foreign, 0);
+      const rowIds = state.rows
+        .filter((r: any) => r.foreignCandidate)
+        .map((r: any) => r.id);
+      assert.equal(rowIds.length, 25);
+      const classify = (ids: string[], session = committee) =>
+        req(
+          foreignRoot + school + "/foreign-students",
+          "POST",
+          {
+            rowIds: ids,
+            reason:
+              "El colegio declara estos registros como extranjeros; matrícula existente.",
+          },
+          session,
+        );
+      assert.equal((await classify(rowIds, observer)).status, 403);
+      assert.equal(success(await classify(rowIds.slice(0, 24))).registered, 24);
+      assert.equal(success(await classify(rowIds.slice(0, 24))).registered, 0);
+      const foreignEntry = (studentCode: string) =>
+        req("/voter/dni-sessions", "POST", {
+          electionId: foreignElection.id,
+          identityType: "EXTRANJERO",
+          studentCode,
+        });
+      assert.equal((await foreignEntry("extranjero")).status, 403);
+      assert.equal((await foreignEntry("MATRICULA-25")).status, 403);
+      assert.equal((await foreignEntry("MATRICULA-0")).status, 409);
+      for (const number of [1, 2])
+        success(
+          await req(
+            foreignRoot + "/lists",
+            "POST",
+            {
+              number,
+              name: "Lista extranjera " + number,
+              symbol: "sprout",
+              color: "#0b1f3a",
+              candidates: [
+                { name: "Candidata sintética", position: "Alcaldía" },
+              ],
+              proposal: "",
+              active: true,
+            },
+            committee,
+          ),
+        );
+      success(await req(foreignRoot + "/prepare", "POST", {}, committee));
+      success(
+        await req(
+          foreignRoot + "/windows/MANANA/open",
+          "POST",
+          { reason: "Inicio del ensayo de matrícula extranjera" },
+          committee,
+        ),
+      );
+      const first = await foreignEntry("MATRICULA-0");
+      success(first);
+      const latest = await foreignEntry("matricula-0"),
+        data = success(latest);
+      assert.equal(data.student.displayName, "Estudiante Sintético 0");
+      assert.equal(
+        (
+          await req("/voter/me", "GET", undefined, {
+            cookie: first.cookies[0],
+            csrf: first.data.data.csrfToken,
+          })
+        ).status,
+        401,
+      );
+      const session = { cookie: latest.cookies[0], csrf: data.csrfToken };
+      const votes = await Promise.all(
+        [1, 2].map(() =>
+          req(
+            "/voter/votes",
+            "POST",
+            { electionId: foreignElection.id, kind: "BLANCO" },
+            session,
+          ),
+        ),
+      );
+      votes.forEach(success);
+      assert.equal(
+        await db.ballot.count({ where: { electionId: foreignElection.id } }),
+        1,
+      );
+      assert.equal((await foreignEntry("MATRICULA-0")).status, 403);
+      // Only previously imported, unregistered records may be enabled during the day.
+      assert.equal(success(await classify(rowIds.slice(24))).registered, 1);
+      state = success(
+        await req(foreignRoot + school, "GET", undefined, committee),
+      );
+      assert.equal(state.foreign, 25);
+      assert.equal(state.eligible, 27);
+      assert.equal(state.unavailable, 0);
+      assert.equal(success(await classify(rowIds)).registered, 0);
+      const national = state.rows.find(
+        (r: any) => r.studentCode === "MATRICULA-25",
+      );
+      assert.equal((await classify([national.id])).status, 409);
+      const { decryptDocument } = await import(
+        "../apps/api/src/private-data.js"
+      );
+      const stored = await db.schoolDraft.findFirstOrThrow({
+        where: { electionId: foreignElection.id, studentCode: "MATRICULA-0" },
+      });
+      assert.equal(decryptDocument(stored.documentEncrypted), "");
+      assert.equal(
+        await db.ballot.count({ where: { electionId: foreignElection.id } }),
+        1,
+      );
+      const events = await db.audit.findMany({
+        where: {
+          electionId: foreignElection.id,
+          action: "FOREIGN_STUDENTS_DECLARED",
+        },
+      });
+      assert.equal(events.length, 2);
+      assert.ok(
+        !JSON.stringify(events.map((x: any) => x.detail)).includes(
+          "MATRICULA-0",
+        ),
+      );
+      await db.election.update({
+        where: { id: foreignElection.id },
+        data: { state: "CERRADA" },
+      });
+      assert.equal((await classify(rowIds)).status, 409);
+    },
+  );
+  await check(
+    "Readiness rechaza una base sin la nueva columna de extranjeros y se recupera al migrar",
+    async () => {
+      const schemaOwner = new pg.Client({
+        connectionString: ownerUrl.toString(),
+      });
+      await schemaOwner.connect();
+      try {
+        await schemaOwner.query(
+          'ALTER TABLE school_drafts RENAME COLUMN "isForeign" TO "isForeign_upgrade_test"',
+        );
+        try {
+          assert.equal((await req("/health/ready")).status, 503);
+        } finally {
+          await schemaOwner.query(
+            'ALTER TABLE school_drafts RENAME COLUMN "isForeign_upgrade_test" TO "isForeign"',
+          );
+        }
+        assert.equal((await req("/health/ready")).status, 200);
+      } finally {
+        await schemaOwner.end();
+      }
+    },
+  );
+  await check(
     "Escudo PNG válido se sirve con su tipo; SVG y carga sin permisos se rechazan",
     async () => {
       const base64 =

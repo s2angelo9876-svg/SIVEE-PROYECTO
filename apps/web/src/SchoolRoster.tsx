@@ -22,6 +22,9 @@ function SchoolRosterScreen() {
   const { id, election, can } = useAdmin(),
     root = `/admin/elections/${id}/roster/school`;
   const editable = can("roster:write") && election.state === "BORRADOR";
+  const foreignEditable =
+    can("roster:write") &&
+    ["BORRADOR", "PREPARADA", "EN_CURSO", "PAUSADA"].includes(election.state);
   const [data, setData] = useState<any>(),
     [source, setSource] = useState<any>(),
     [preview, setPreview] = useState<any>();
@@ -62,6 +65,9 @@ function SchoolRosterScreen() {
         .toLocaleLowerCase()
         .includes(query.toLocaleLowerCase()),
   );
+  const foreignCandidates = (data?.rows || []).filter(
+    (r: any) => r.foreignCandidate,
+  );
   if (!can("roster:write"))
     return (
       <Notice>Esta pantalla requiere permiso de operador de padrón.</Notice>
@@ -76,6 +82,7 @@ function SchoolRosterScreen() {
     shift: null,
     enrollment: "DEFINITIVA",
     enrollmentApproved: false,
+    isForeign: false,
     excluded: false,
   });
   const inputFields = [
@@ -126,6 +133,11 @@ function SchoolRosterScreen() {
           <span>
             <strong>{data.unavailable}</strong> sin DNI habilitado
           </span>
+          {data.foreign > 0 && (
+            <span>
+              <strong>{data.foreign}</strong> extranjeros con matrícula
+            </span>
+          )}
           <span>
             <strong>{data.shifts.MANANA}</strong> mañana
           </span>
@@ -141,6 +153,38 @@ function SchoolRosterScreen() {
             <strong>{data.excluded}</strong> excluidos con motivo
           </span>
         </div>
+      )}
+      {foreignEditable && foreignCandidates.length > 0 && (
+        <section className="panel">
+          <h2>Estudiantes extranjeros sin DNI</h2>
+          <p>
+            Si el colegio identifica estos registros como estudiantes
+            extranjeros, pueden usar su código de matrícula del Excel. No se
+            genera un DNI ni un código nuevo.
+          </p>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const result = await api(root + "/foreign-students", {
+                  method: "POST",
+                  body: {
+                    rowIds: foreignCandidates.map((r: any) => r.id),
+                    reason:
+                      "El colegio declara estos registros como extranjeros; acceso con su matrícula existente.",
+                  },
+                });
+                await load();
+                setMessage(
+                  `${result.registered} estudiantes extranjeros habilitados con su matrícula.`,
+                );
+              })
+            }
+          >
+            Habilitar {foreignCandidates.length} como extranjeros con matrícula
+          </button>
+        </section>
       )}
       {editable && (
         <section className="panel">
@@ -382,6 +426,7 @@ function SchoolRosterScreen() {
                   <td>
                     <strong>{r.displayName}</strong>
                     <small>
+                      {r.isForeign ? "Extranjero · matrícula " : "Matrícula "}
                       {r.studentCode} · {r.document}
                     </small>
                   </td>
@@ -456,8 +501,15 @@ function SchoolRosterScreen() {
               e.preventDefault();
               void run(async () => {
                 const row = Object.fromEntries(
-                  [...inputFields, "shift"].map((k) => [k, form[k]]),
+                  [...inputFields, "shift", "isForeign"].map((k) => [
+                    k,
+                    form[k],
+                  ]),
                 );
+                if (form.isForeign && !row.studentCode)
+                  throw new Error(
+                    "Ingresa el código de matrícula existente del estudiante extranjero.",
+                  );
                 if (!row.studentCode)
                   row.studentCode = "MANUAL-" + form.requestId;
                 if (form.id)
@@ -503,6 +555,19 @@ function SchoolRosterScreen() {
                 </Field>
               ))}
             </div>
+            {!form.id && (
+              <label className="roster-check">
+                <input
+                  type="checkbox"
+                  checked={form.isForeign}
+                  onChange={(e) =>
+                    setForm({ ...form, isForeign: e.target.checked })
+                  }
+                />
+                Estudiante extranjero: ingresar con su código de matrícula en
+                lugar de DNI.
+              </label>
+            )}
             {form.id && (
               <>
                 <label className="roster-check">

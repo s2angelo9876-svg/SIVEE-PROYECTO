@@ -225,7 +225,7 @@ export function Landing() {
           <p>
             {e?.authMode === "CODE"
               ? "Ten a mano tu documento y código de simulación."
-              : "Ten a mano tu DNI. Puedes votar cuando la jornada esté abierta, sin importar tu turno."}
+              : "Usa tu DNI o, si eres estudiante extranjero habilitado, tu matrícula. Puedes votar cuando la jornada esté abierta, sin importar tu turno."}
           </p>
         </section>
         <section className="landing-steps">
@@ -237,7 +237,7 @@ export function Landing() {
               desc:
                 e?.authMode === "CODE"
                   ? "Ingresa tu documento y el código de simulación."
-                  : "Ingresa tu propio DNI para abrir la cédula. No necesitas autorización de mesa.",
+                  : "Ingresa tu DNI o la matrícula habilitada para estudiantes extranjeros. No necesitas autorización de mesa.",
             },
             {
               n: "02",

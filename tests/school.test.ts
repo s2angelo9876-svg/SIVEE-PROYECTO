@@ -10,6 +10,12 @@ import {
 import { encryptDocument, decryptDocument } from "../apps/api/src/private-data";
 import { schoolShift } from "../apps/api/src/school-shifts";
 import { schoolFixture } from "./school-fixture";
+it("solo clasificar explícitamente como extranjero permite usar matrícula sin DNI", () => {
+  expect(schoolIssues({ document: "", isForeign: false })).toHaveLength(1);
+  expect(schoolIssues({ document: "", isForeign: true })).toEqual([]);
+  expect(schoolIssues({ document: "ABC123456", isForeign: true })).toEqual([]);
+  expect(schoolIssues({ document: "12345678", isForeign: true })).toEqual([]);
+});
 it("lee 1742 filas, encabezados dobles y celdas combinadas sin inventar turnos", async () => {
   const { rows } = await parseSchoolFile(
     schoolSourceSchema.parse(await schoolFixture()),
