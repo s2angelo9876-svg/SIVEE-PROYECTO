@@ -255,6 +255,35 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
   await expect(
     page.getByRole("button", { name: /Habilitar 1 como extranjeros/ }),
   ).toHaveCount(0);
+  const foreignSummary = page.getByRole("region", {
+    name: "Resumen de extranjeros por turno",
+  });
+  // The summary covers the whole election while table filters combine.
+  await expect(foreignSummary).toContainText("0 extranjeros de mañana");
+  await expect(foreignSummary).toContainText("1 extranjeros de tarde");
+  await page.getByLabel("Filtrar por tipo de acceso").selectOption("FOREIGN");
+  await expect(page.getByText("1 coincidencias · Página 1 de 1")).toBeVisible();
+  await expect(
+    page.getByText("Estudiante extranjero de ensayo", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("MANANA");
+  await expect(
+    page.getByText("No hay estudiantes que coincidan con los filtros."),
+  ).toBeVisible();
+  await expect(foreignSummary).toContainText("1 extranjeros de tarde");
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("TARDE");
+  await expect(
+    page.getByText("Estudiante extranjero de ensayo", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Filtrar por tipo de acceso").selectOption("DNI");
+  await expect(
+    page.getByText("Estudiante Sintético 1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Estudiante extranjero de ensayo", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Filtrar estudiantes por turno").selectOption("");
+  await page.getByLabel("Filtrar por tipo de acceso").selectOption("");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.screenshot({
     path: "artifacts/official-roster.png",

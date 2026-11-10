@@ -875,6 +875,19 @@ try {
         .filter((r: any) => r.foreignCandidate)
         .map((r: any) => r.id);
       assert.equal(rowIds.length, 25);
+      // Mixed synthetic shifts verify the breakdown independently of the filters.
+      await db.schoolDraft.updateMany({
+        where: { id: { in: rowIds.slice(0, 10) } },
+        data: { section: "HONESTIDAD" },
+      });
+      await db.schoolDraft.updateMany({
+        where: { id: { in: rowIds.slice(10, 24) } },
+        data: { section: "AMISTAD" },
+      });
+      await db.schoolDraft.update({
+        where: { id: rowIds[24] },
+        data: { section: "SIN CLASIFICAR", shift: null },
+      });
       const classify = (ids: string[], session = committee) =>
         req(
           foreignRoot + school + "/foreign-students",
@@ -963,6 +976,18 @@ try {
         await req(foreignRoot + school, "GET", undefined, committee),
       );
       assert.equal(state.foreign, 25);
+      assert.deepEqual(state.foreignShifts, {
+        MANANA: 10,
+        TARDE: 14,
+        UNKNOWN: 1,
+      });
+      assert.equal(
+        Object.values(state.foreignShifts).reduce(
+          (a: number, b: any) => a + b,
+          0,
+        ),
+        state.foreign,
+      );
       assert.equal(state.eligible, 27);
       assert.equal(state.unavailable, 0);
       assert.equal(success(await classify(rowIds)).registered, 0);

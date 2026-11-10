@@ -79,3 +79,5 @@ Las elecciones nuevas y las oficiales usan acceso directo con DNI. Se conserva e
 - En todos los entornos, las cuentas del personal acceden solo con correo y contraseña, incluso si activaron el autenticador anteriormente. Las sesiones históricas `MFA_SETUP` conservan acceso según sus permisos. Los campos MFA históricos se conservan sin usarse; no se requiere migración ni restablecer cuentas. El cierre global y la publicación mantienen la aprobación de otra cuenta autorizada.
 
 No se registran documentos, secretos ni preferencias en auditoría. Las papeletas no incluyen estudiante, sesión ni dispositivo. Las políticas de supervisión y límites de identificación con DNI se detallan en [Producción](PRODUCCION.md).
+
+El padrón escolar (`GET /admin/elections/:id/roster/school`) incluye `foreignShifts: {MANANA, TARDE, UNKNOWN}`: cantidades de registros clasificados explícitamente como extranjeros por turno, incluidos los pendientes o excluidos. Su suma corresponde a `foreign`. Son totales de la elección, independientes de los filtros de la tabla; la habilitación se consulta en el estado de cada fila. No expone documentos completos.

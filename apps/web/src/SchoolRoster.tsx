@@ -32,6 +32,7 @@ function SchoolRosterScreen() {
     [error, setError] = useState(""),
     [message, setMessage] = useState("");
   const [query, setQuery] = useState(""),
+    [accessFilter, setAccessFilter] = useState(""),
     [pendingOnly, setPendingOnly] = useState(false),
     [page, setPage] = useState(0);
   const [previewPage, setPreviewPage] = useState(0);
@@ -60,6 +61,7 @@ function SchoolRosterScreen() {
   const rows = (data?.rows || []).filter(
     (r: any) =>
       (!pendingOnly || r.issues.length || (!r.publishedAt && !r.excluded)) &&
+      (!accessFilter || (r.isForeign ? "FOREIGN" : "DNI") === accessFilter) &&
       (!shiftFilter || (r.shift || "UNKNOWN") === shiftFilter) &&
       `${r.displayName} ${r.studentCode} ${r.section}`
         .toLocaleLowerCase()
@@ -153,6 +155,37 @@ function SchoolRosterScreen() {
             <strong>{data.excluded}</strong> excluidos con motivo
           </span>
         </div>
+      )}
+      {data && (
+        <section
+          className="panel"
+          aria-label="Resumen de extranjeros por turno"
+        >
+          <h2>Extranjeros por turno</h2>
+          <p>
+            Registros clasificados como extranjeros en esta elección. Comprueba
+            su habilitación en la columna Estado.
+          </p>
+          <div className="compact-stats">
+            <span>
+              <strong>{data.foreign}</strong> extranjeros en total
+            </span>
+            <span>
+              <strong>{data.foreignShifts.MANANA}</strong> extranjeros de mañana
+            </span>
+            <span>
+              <strong>{data.foreignShifts.TARDE}</strong> extranjeros de tarde
+            </span>
+            <span>
+              <strong>{data.foreignShifts.UNKNOWN}</strong> extranjeros sin
+              turno identificado
+            </span>
+          </div>
+          <p>
+            Estos totales corresponden al padrón completo de la elección y no
+            cambian al filtrar la tabla.
+          </p>
+        </section>
       )}
       {foreignEditable && foreignCandidates.length > 0 && (
         <section className="panel">
@@ -359,6 +392,19 @@ function SchoolRosterScreen() {
             }}
           />
         </Field>
+        <Field label="Filtrar por tipo de acceso">
+          <select
+            value={accessFilter}
+            onChange={(e) => {
+              setAccessFilter(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="">Todos los tipos de acceso</option>
+            <option value="DNI">DNI</option>
+            <option value="FOREIGN">Extranjero con matrícula</option>
+          </select>
+        </Field>
         <Field label="Filtrar estudiantes por turno">
           <select
             value={shiftFilter}
@@ -382,7 +428,7 @@ function SchoolRosterScreen() {
               setPage(0);
             }}
           />
-          Mostrar registros sin DNI habilitado
+          Mostrar solo registros con observaciones o pendientes de habilitar
         </label>
         <button
           className="button text"
@@ -416,11 +462,19 @@ function SchoolRosterScreen() {
                 <th>Estudiante</th>
                 <th>Grado / sección</th>
                 <th>Turno</th>
+                <th>Tipo de acceso</th>
                 <th>Estado</th>
                 <th>Acción</th>
               </tr>
             </thead>
             <tbody>
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={6}>
+                    No hay estudiantes que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
               {rows.slice(page * 50, (page + 1) * 50).map((r: any) => (
                 <tr key={r.id}>
                   <td>
@@ -434,6 +488,7 @@ function SchoolRosterScreen() {
                     {r.grade}° {r.section}
                   </td>
                   <td>{r.shift ? shiftLabel(r.shift) : "Sin clasificar"}</td>
+                  <td>{r.isForeign ? "Extranjero con matrícula" : "DNI"}</td>
                   <td>
                     {r.excluded
                       ? "Excluido con motivo"
@@ -472,7 +527,8 @@ function SchoolRosterScreen() {
             Anterior
           </button>
           <span>
-            {rows.length} coincidencias · Página {page + 1}
+            {rows.length} coincidencias · Página {page + 1} de{" "}
+            {Math.max(1, Math.ceil(rows.length / 50))}
           </span>
           <button
             className="button secondary"

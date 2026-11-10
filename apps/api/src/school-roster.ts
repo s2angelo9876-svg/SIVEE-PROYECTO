@@ -63,6 +63,11 @@ schoolRoster.get(root, permit("roster:write"), async (req, res) => {
       unavailable: rows.filter((r) => !r.publishedAt && !r.excluded).length,
       excluded: rows.filter((r) => r.excluded).length,
       foreign: rows.filter((r) => r.isForeign).length,
+      foreignShifts: {
+        MANANA: rows.filter((r) => r.isForeign && r.shift === "MANANA").length,
+        TARDE: rows.filter((r) => r.isForeign && r.shift === "TARDE").length,
+        UNKNOWN: rows.filter((r) => r.isForeign && !r.shift).length,
+      },
       shifts: {
         MANANA: rows.filter((r) => r.shift === "MANANA").length,
         TARDE: rows.filter((r) => r.shift === "TARDE").length,
