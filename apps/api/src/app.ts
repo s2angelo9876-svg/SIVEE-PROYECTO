@@ -83,6 +83,8 @@ app.get("/api/v1/health/ready", async (_req, res) => {
   try {
     await db.$queryRaw`SELECT 1`;
     await db.$queryRaw`SELECT "isForeign" FROM school_drafts LIMIT 0`;
+    await db.$queryRaw`SELECT id FROM election_copies LIMIT 0`;
+    await db.$queryRaw`SELECT "requestId" FROM election_copy_recoveries LIMIT 0`;
     res.json({
       data: { status: "ready", database: "connected", mode: config.SIVEE_ENV },
     });

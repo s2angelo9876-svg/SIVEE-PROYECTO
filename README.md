@@ -77,6 +77,7 @@ Hay 25 electores por turno: documentos `00000001`–`00000050`, códigos `DEMOCO
 - Portada y sufragio responsive: documento + código, confirmación de identidad, cédula, revisión, emisión y constancia neutra.
 - Padrón Excel/CSV y alta individual en BORRADOR, con selección de hoja/columnas, validación, historial de cargas y reemisión controlada de códigos.
 - Elecciones y listas configurables; 2–4 listas antes de preparar. Opciones blanco y nulo autorizables.
+- [Copias de configuración](docs/COPIAS_CONFIGURACION.md): guarda un punto con padrón, extranjeros, listas, logos y horarios; recupera en otra elección sin votos, conservando el ensayo.
 - Ventanas mañana/tarde: apertura, pausa, reanudación y cierre definitivo. El [cierre global y la publicación permiten temporalmente una cuenta autorizada](docs/CIERRE_TEMPORAL_UNA_CUENTA.md), conservando la conciliación y la auditoría.
 - Registro atómico, idempotente y concurrente de votos. La papeleta no contiene identidad ni fecha exacta de emisión.
 - Panel privado de participación por SSE. Resultados bloqueados en servidor hasta cierre, conciliación y publicación.

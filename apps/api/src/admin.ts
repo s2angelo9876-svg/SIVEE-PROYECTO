@@ -7,6 +7,7 @@ import { validateListLogo } from "./list-logo.js";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { schoolRoster } from "./school-roster.js";
+import { electionCopies } from "./election-copies.js";
 import { registerSchoolRecords } from "./school-registration.js";
 import { issueSession, adminAuth, permit, cookieOptions } from "./auth.js";
 import {
@@ -128,6 +129,7 @@ admin.post(
 );
 admin.use(adminAuth);
 admin.use(schoolRoster);
+admin.use(electionCopies);
 admin.get("/me", (_req, res) => {
   const u = res.locals.admin;
   res.json({

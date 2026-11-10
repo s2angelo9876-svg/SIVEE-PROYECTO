@@ -81,3 +81,12 @@ Las elecciones nuevas y las oficiales usan acceso directo con DNI. Se conserva e
 No se registran documentos, secretos ni preferencias en auditoría. Las papeletas no incluyen estudiante, sesión ni dispositivo. Las políticas de supervisión y límites de identificación con DNI se detallan en [Producción](PRODUCCION.md).
 
 El padrón escolar (`GET /admin/elections/:id/roster/school`) incluye `foreignShifts: {MANANA, TARDE, UNKNOWN}`: cantidades de registros clasificados explícitamente como extranjeros por turno, incluidos los pendientes o excluidos. Su suma corresponde a `foreign`. Son totales de la elección, independientes de los filtros de la tabla; la habilitación se consulta en el estado de cada fila. No expone documentos completos.
+
+## Copias de configuración
+
+- `GET /admin/elections/:id/copies`: últimas 20 copias, con `id`, `label`, `createdAt` y `summary` (nombre, registros, habilitados, extranjeros, listas y turnos). No devuelve documentos ni el contenido cifrado.
+- `POST /admin/elections/:id/copies`: `{requestId:UUID,label:string}` (3–100 caracteres). Guarda los valores persistidos de elecciones con acceso DNI/matrícula. Idempotente por `requestId`/actor/elección/etiqueta; no modifica una copia existente.
+- `POST /admin/elections/:id/copies/:copyId/recover`: `{requestId:UUID,name:string,confirmation:"CREAR NUEVA ELECCION"}`. Crea una elección nueva en borrador con turnos programados y cero votos; devuelve `{id,name,state}`. Conserva origen y auditorías. No admite elecciones preparadas/en curso/pausadas de esa institución pendientes de cerrar. Permisos `elections:write`, `roster:write` y `lists:write`: sobre el origen para guardar/listar y de ámbito global institucional para recuperar.
+- Una copia inválida se rechaza con 409 `COPY_INVALID`; un UUID de recuperación reutilizado con otros parámetros se rechaza con 409. Reintentos idénticos y concurrentes devuelven la misma elección, sin duplicar datos ni auditorías.
+
+Véase [Copias de configuración](COPIAS_CONFIGURACION.md) para los datos incluidos, límites y migración necesaria en Railway.

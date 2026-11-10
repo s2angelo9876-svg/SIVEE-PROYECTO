@@ -8,6 +8,10 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 2. Si sigue abierta, cierra sus turnos cuando ya no haya votantes de prueba. Solicita y aprueba el cierre global con tu misma cuenta autorizada de comité; esta excepción es temporal. Si ya hay una solicitud pendiente, pulsa **Aprobar cierre** desde esa cuenta. Véase [Cierre temporal](CIERRE_TEMPORAL_UNA_CUENTA.md).
 3. Conserva el ensayo y su auditoría en el historial. El cierre es definitivo; no se trata de reabrir esa misma elección ni de borrar sus papeletas. La opción de reiniciar una simulación solo existe en DEMO.
 
+## Recuperar una configuración ya guardada
+
+Si guardaste una copia después de cargar padrón y listas, puedes usar **Configuración → Copias de configuración → Recuperar como nueva elección** para crear el proceso sin volver a importar esos datos. Conserva el ensayo y sus votos. Revisa nombre, autorización, horarios y cero votos antes de preparar. No copia cambios posteriores al punto guardado. Véase [Copias de configuración](COPIAS_CONFIGURACION.md).
+
 ## Crear el proceso real desde el panel
 
 1. En **Configuración → Nueva elección**, crea un proceso con un nombre inequívoco, por ejemplo **Municipio Escolar · Viernes 13 de noviembre de 2026**. En la instalación de producción se crea como elección oficial en borrador.

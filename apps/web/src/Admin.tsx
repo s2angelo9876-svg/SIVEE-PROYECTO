@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { readListLogo } from "./list-logo";
+import { ElectionCopies } from "./ElectionCopies";
 import { requiresDistinctApprover } from "../../../packages/shared/approval-policy";
 import {
   LayoutDashboard,
@@ -1356,6 +1357,7 @@ export function Settings() {
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
   const [newElection, setNew] = useState(false);
+  const [scheduleDirty, setScheduleDirty] = useState(false);
   const [modal, setModal] = useState("");
   const [confirmation, setConfirmation] = useState("");
   useEffect(() => {
@@ -1562,7 +1564,33 @@ export function Settings() {
       )}
       {!newElection && election && (
         <>
-          <InstitutionSchedule />
+          <InstitutionSchedule onPendingChanges={setScheduleDirty} />
+          <ElectionCopies
+            key={id}
+            configurationDirty={
+              scheduleDirty ||
+              (!!form &&
+                [
+                  "name",
+                  "year",
+                  "scope",
+                  "blankAllowed",
+                  "nullAllowed",
+                  "regulation",
+                  "contact",
+                  "institutionalApprovalReference",
+                ].some(
+                  (field) => (form[field] ?? "") !== (election[field] ?? ""),
+                ))
+            }
+            onRecovered={async (created) => {
+              await refresh();
+              setId(created.id);
+              setSuccess(
+                "La copia se recuperó en una nueva elección en borrador, sin votos. Revisa sus horarios y configuración antes de prepararla.",
+              );
+            }}
+          />
           <section className="panel preparation-panel">
             <div>
               <h2>Lista para recibir las voces</h2>
@@ -1689,6 +1717,9 @@ const auditLabels: Record<string, string> = {
   ELECTION_UPDATED: "Configuración actualizada",
   INSTITUTIONAL_REFERENCE_UPDATED:
     "Referencia de autorización institucional actualizada",
+  ELECTION_COPY_SAVED: "Copia de configuración guardada",
+  ELECTION_COPY_RECOVERED: "Copia recuperada como nueva elección",
+  ELECTION_CREATED_FROM_COPY: "Elección creada desde una copia",
   DEMO_REPLACED: "Simulación archivada",
   DEMO_CREATED_FROM_PREVIOUS: "Nueva simulación creada",
   REPORT_PDF_EXPORTED: "Acta PDF descargada",
@@ -2086,7 +2117,11 @@ export function Accounts() {
   );
 }
 
-function InstitutionSchedule() {
+function InstitutionSchedule({
+  onPendingChanges,
+}: {
+  onPendingChanges: (pending: boolean) => void;
+}) {
   const site = useSite();
   const { election, id, refresh } = useAdmin();
   const [institution, setInstitution] = useState<any>();
@@ -2099,6 +2134,7 @@ function InstitutionSchedule() {
       ? new Date(new Date(s).getTime() - 5 * 3600000).toISOString().slice(0, 16)
       : "";
   useEffect(() => {
+    onPendingChanges(false);
     api("/admin/institution")
       .then(setInstitution)
       .catch((e) => setError(e.message));
@@ -2200,6 +2236,7 @@ function InstitutionSchedule() {
           setBusy(true);
           setError("");
           try {
+            onPendingChanges(true);
             for (const t of times)
               await api(`/admin/elections/${id}/windows/${t.shift}`, {
                 method: "PATCH",
@@ -2213,6 +2250,7 @@ function InstitutionSchedule() {
                 },
               });
             await refresh();
+            onPendingChanges(false);
             setMessage("Horarios guardados.");
           } catch (e: any) {
             setError(e.message);
@@ -2230,26 +2268,28 @@ function InstitutionSchedule() {
                   <input
                     type="datetime-local"
                     value={t.start}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      onPendingChanges(true);
                       setTimes(
                         times.map((x, j) =>
                           i === j ? { ...x, start: e.target.value } : x,
                         ),
-                      )
-                    }
+                      );
+                    }}
                   />
                 </Field>
                 <Field label="Fin permitido (opcional)">
                   <input
                     type="datetime-local"
                     value={t.end}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      onPendingChanges(true);
                       setTimes(
                         times.map((x, j) =>
                           i === j ? { ...x, end: e.target.value } : x,
                         ),
-                      )
-                    }
+                      );
+                    }}
                   />
                 </Field>
               </div>

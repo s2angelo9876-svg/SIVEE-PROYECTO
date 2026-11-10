@@ -304,3 +304,25 @@ model Incident {
   createdAt DateTime @default(now())
   @@map("incidents")
 }
+
+model ElectionCopy {
+  id String @id @db.Uuid
+  electionId String @db.Uuid
+  adminId String @db.Uuid
+  label String
+  payloadEncrypted String
+  sha256 String
+  summary Json
+  createdAt DateTime @default(now())
+  @@index([electionId, createdAt])
+  @@map("election_copies")
+}
+model ElectionCopyRecovery {
+  requestId String @id @db.Uuid
+  copyId String @db.Uuid
+  electionId String @unique @db.Uuid
+  adminId String @db.Uuid
+  requestHash String
+  createdAt DateTime @default(now())
+  @@map("election_copy_recoveries")
+}

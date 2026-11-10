@@ -68,7 +68,7 @@ try {
     "GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO sivee_app",
   );
   await client.query(
-    "REVOKE UPDATE, DELETE, TRUNCATE ON ballots, audit, reports, roster_imports, school_imports FROM sivee_app",
+    "REVOKE UPDATE, DELETE, TRUNCATE ON ballots, audit, reports, roster_imports, school_imports, election_copies, election_copy_recoveries FROM sivee_app",
   );
   await client.query(
     'GRANT UPDATE (state, "approvedBy") ON reports TO sivee_app',
