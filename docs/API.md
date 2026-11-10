@@ -31,7 +31,7 @@ La sesión consumida solo permite reconocer participación/reintentos hasta el l
 - `GET .../results`, `.../reports/final.pdf`, `.../reports/final.csv` — publicación requerida.
 - `GET .../audit`, `.../audit/export`; `GET/POST .../incidents`; `PATCH .../incidents/:incidentId` — `{state}`.
 - `POST /admin/demo/:id/reset` — `{confirmation:"NUEVA SIMULACION"}`; archiva y crea nueva elección.
-- `POST /admin/mfa/setup` — `{password}`; `POST /admin/mfa/confirm` — `{code}`.
+- El personal ingresa con `{email, password}` en `POST /admin/auth/login`. Las rutas `/admin/mfa/setup` y `/admin/mfa/confirm` se retiraron (404).
 - `GET/POST /admin/accounts`; `PATCH /admin/accounts/:accountId` — `{active}`; solo ADMIN_TECNICO.
 
 ## Integridad
@@ -76,6 +76,6 @@ Las elecciones nuevas y las oficiales usan acceso directo con DNI. Se conserva e
 - `POST .../school/foreign-students`: `{rowIds:UUID[],reason:string}` (motivo 10–300 caracteres, hasta 5000 filas únicas). Requiere `roster:write` y alcance institucional. Marca explícitamente `isForeign` y registra mediante el identificador privado `FOREIGN:<matrícula normalizada>`. Solo admite registros ya cargados sin DNI válido, no excluidos y sin inscripción previa, además de reintentos ya clasificados. Puede habilitar esos registros en BORRADOR/PREPARADA/EN_CURSO/PAUSADA; se rechaza al cerrar. Audita `FOREIGN_STUDENTS_DECLARED`, con IDs opacos y motivo, sin documentos ni matrículas. No habilita otras filas pendientes fuera de la selección.
 - `POST .../school/register`: `{}`; sincroniza automáticamente las cargas anteriores mientras la elección está en BORRADOR. La pantalla lo llama al abrirse y la preparación también sincroniza registros antes de contar electores. `POST .../school/publish` fue retirado. Las correcciones de DNI registran automáticamente al estudiante cuando desaparece el error. No se alteran elecciones anteriores ni se reactiva a alumnos desactivados institucionalmente.
 - El turno se clasifica por grado y sección con la tabla institucional suministrada: 1.º A–G mañana/H–M tarde; 2.º A–F mañana/G–L tarde; 3.º a 5.º A–F mañana/G–K tarde. 3.º Gabriel García Márquez es tarde por confirmación explícita del colegio. Se reconocen los nombres y sus variantes ortográficas habituales; las secciones no reconocidas se muestran sin clasificar, sin impedir votar. La separación no cambia el acceso por DNI en cualquier horario abierto.
-- En producción, el primer login administrativo sin MFA devuelve `mfaSetupRequired:true` y una sesión `MFA_SETUP`: solo permite `/me`, `/mfa/setup`, `/mfa/confirm`, `/auth/logout`. Confirmar TOTP habilita el resto del panel; los siguientes logins requieren OTP. Este control no se exige a estudiantes.
+- En todos los entornos, las cuentas del personal acceden solo con correo y contraseña, incluso si activaron el autenticador anteriormente. Las sesiones históricas `MFA_SETUP` conservan acceso según sus permisos. Los campos MFA históricos se conservan sin usarse; no se requiere migración ni restablecer cuentas. El cierre global y la publicación mantienen la aprobación de otra cuenta autorizada.
 
 No se registran documentos, secretos ni preferencias en auditoría. Las papeletas no incluyen estudiante, sesión ni dispositivo. Las políticas de supervisión y límites de identificación con DNI se detallan en [Producción](PRODUCCION.md).

@@ -31,7 +31,6 @@ try {
   ({ db } = await import("../apps/api/src/db.js"));
   const { app } = await import("../apps/api/src/app.js");
   const { config } = await import("../apps/api/src/config.js");
-  const { totp } = await import("../apps/api/src/mfa.js");
   server = await new Promise<any>((resolve) => {
     const s = app.listen(0, "127.0.0.1", () => resolve(s));
   });
@@ -1238,43 +1237,61 @@ try {
     },
   );
   await check(
-    "Producción exige MFA: primer acceso limitado, activación y rechazo sin segundo factor",
+    "Producción permite correo y contraseña para cuentas nuevas y con MFA histórico",
     async () => {
       config.SIVEE_ENV = "production";
       try {
-        const limited = await login("observador@sivee.demo");
-        assert.equal(
-          (await req("/admin/elections", "GET", undefined, limited)).status,
-          403,
-        );
-        const setup = success(
-          await req(
-            "/admin/mfa/setup",
-            "POST",
-            { password: "DemoSivee2026!" },
-            limited,
-          ),
-        );
-        success(
-          await req(
-            "/admin/mfa/confirm",
-            "POST",
-            { code: totp(setup.secret, Math.floor(Date.now() / 30000)) },
-            limited,
-          ),
-        );
-        assert.equal(
-          (await req("/admin/elections", "GET", undefined, limited)).status,
-          200,
-        );
+        for (const enabled of [false, true]) {
+          await db.admin.update({
+            where: { email: "observador@sivee.demo" },
+            data: {
+              mfaEnabled: enabled,
+              mfaSecret: enabled ? "historical-encrypted-secret" : null,
+            },
+          });
+          const session = await login("observador@sivee.demo");
+          assert.equal(
+            (await req("/admin/elections", "GET", undefined, session)).status,
+            200,
+          );
+          assert.equal(
+            (await req("/admin/accounts", "GET", undefined, session)).status,
+            403,
+          );
+          // A session issued by the old deployment must not trap its user in setup.
+          await db.adminSession.updateMany({
+            where: { admin: { email: "observador@sivee.demo" } },
+            data: { purpose: "MFA_SETUP" },
+          });
+          assert.equal(
+            (await req("/admin/elections", "GET", undefined, session)).status,
+            200,
+          );
+          assert.equal(
+            (await req("/admin/mfa/setup", "POST", {}, session)).status,
+            404,
+          );
+          assert.equal(
+            (await req("/admin/mfa/confirm", "POST", {}, session)).status,
+            404,
+          );
+        }
         assert.equal(
           (
             await req("/admin/auth/login", "POST", {
               email: "observador@sivee.demo",
-              password: "DemoSivee2026!",
+              password: "incorrect-password",
             })
           ).status,
           401,
+        );
+        const account = await db.admin.findUniqueOrThrow({
+          where: { email: "observador@sivee.demo" },
+        });
+        assert.ok(
+          await db.audit.count({
+            where: { adminId: account.id, action: "ADMIN_LOGIN" },
+          }),
         );
       } finally {
         config.SIVEE_ENV = "test";

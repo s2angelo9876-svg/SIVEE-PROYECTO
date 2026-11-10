@@ -119,25 +119,7 @@ export async function adminAuth(
   )
     throw new AppError(401, "UNAUTHENTICATED", "Tu sesión ha vencido.");
   csrf(req, token);
-  if (
-    session.purpose === "MFA_SETUP" &&
-    !["/me", "/mfa/setup", "/mfa/confirm", "/auth/logout"].includes(req.path)
-  )
-    throw new AppError(
-      403,
-      "MFA_SETUP_REQUIRED",
-      "Completa la activación del segundo factor para acceder al panel.",
-    );
-  if (
-    config.SIVEE_ENV === "production" &&
-    session.purpose === "FULL" &&
-    !session.admin.mfaEnabled
-  )
-    throw new AppError(
-      403,
-      "MFA_SETUP_REQUIRED",
-      "Activa el segundo factor antes de continuar.",
-    );
+  // Legacy MFA_SETUP sessions already verified the password; normal permissions apply.
   res.locals.admin = session.admin;
   res.locals.adminSession = session;
   res.locals.csrfToken = csrfFor(token);

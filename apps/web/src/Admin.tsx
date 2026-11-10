@@ -62,8 +62,6 @@ export function AdminLogin() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [otp, setOtp] = useState("");
-  const [mfa, setMfa] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   return (
@@ -111,15 +109,14 @@ export function AdminLogin() {
               try {
                 const d = await api("/admin/auth/login", {
                   method: "POST",
-                  body: { email, password, ...(mfa ? { otp } : {}) },
+                  body: { email, password },
                 });
                 tokens.admin = d.csrfToken;
-                navigate(d.mfaSetupRequired ? "/activar-cuenta" : "/admin", {
+                navigate("/admin", {
                   replace: true,
                 });
               } catch (e: any) {
                 setError(e.message);
-                if (e.code === "MFA_REQUIRED") setMfa(true);
               } finally {
                 setBusy(false);
               }
@@ -145,17 +142,6 @@ export function AdminLogin() {
                 required
               />
             </Field>
-            {mfa && (
-              <Field label="Código de autenticación">
-                <input
-                  inputMode="numeric"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  pattern="[0-9]{6}"
-                  required
-                />
-              </Field>
-            )}
             <button className="button full" disabled={busy}>
               {busy ? "Ingresando…" : "Ingresar al panel"}
               <ArrowRight size={18} />
@@ -200,10 +186,6 @@ export function AdminShell() {
     api("/admin/me")
       .then((u) => {
         tokens.admin = u.csrfToken;
-        if (u.mfaSetupRequired) {
-          navigate("/activar-cuenta", { replace: true });
-          return;
-        }
         setUser(u);
         return load();
       })
@@ -1918,129 +1900,23 @@ export function Incidents() {
   );
 }
 export function Security() {
-  const { user } = useAdmin();
-  return <MfaSetup initialEnabled={user.mfaEnabled} />;
-}
-export function ActivateAccount() {
-  const navigate = useNavigate();
-  const [user, setUser] = useState<any>(),
-    [error, setError] = useState("");
-  useEffect(() => {
-    api("/admin/me")
-      .then((u) => {
-        tokens.admin = u.csrfToken;
-        setUser(u);
-        if (!u.mfaSetupRequired) navigate("/admin", { replace: true });
-      })
-      .catch((e) => setError(e.message));
-  }, []);
-  return (
-    <main className="standalone-panel">
-      <Brand />
-      {error && <Notice>{error}</Notice>}
-      {user && (
-        <MfaSetup
-          initialEnabled={false}
-          onEnabled={() => navigate("/admin", { replace: true })}
-        />
-      )}
-    </main>
-  );
-}
-function MfaSetup({
-  initialEnabled,
-  onEnabled,
-}: {
-  initialEnabled: boolean;
-  onEnabled?: () => void;
-}) {
-  const [password, setPassword] = useState("");
-  const [setup, setSetup] = useState<any>();
-  const [code, setCode] = useState("");
-  const [enabled, setEnabled] = useState(initialEnabled);
-  const [error, setError] = useState("");
   return (
     <>
       <PageTitle
-        title="Protege tu cuenta"
-        description="Agrega un código temporal de tu aplicación de autenticación."
+        title="Seguridad de cuenta"
+        description="Accede con tu correo y contraseña personal."
       />
-      {error && <Notice>{error}</Notice>}
       <section className="panel security-panel">
-        <div className="section-icon">
-          <KeyRound />
-        </div>
-        <h2>Verificación en dos pasos</h2>
-        {enabled ? (
-          <Notice success>
-            La autenticación TOTP está activada para tu cuenta.
-          </Notice>
-        ) : !setup ? (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                setSetup(
-                  await api("/admin/mfa/setup", {
-                    method: "POST",
-                    body: { password },
-                  }),
-                );
-                setPassword("");
-              } catch (e: any) {
-                setError(e.message);
-              }
-            }}
-          >
-            <p>
-              Compatible con aplicaciones de autenticación TOTP. Confirma tu
-              contraseña para comenzar.
-            </p>
-            <Field label="Tu contraseña actual">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </Field>
-            <button className="button">Configurar autenticación</button>
-          </form>
-        ) : (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                await api("/admin/mfa/confirm", {
-                  method: "POST",
-                  body: { code },
-                });
-                setSetup(undefined);
-                setCode("");
-                setEnabled(true);
-                onEnabled?.();
-              } catch (e: any) {
-                setError(e.message);
-              }
-            }}
-          >
-            <p>
-              Agrega una cuenta TOTP en tu aplicación e introduce esta clave
-              manualmente. No la compartas.
-            </p>
-            <code className="report-hash">{setup.secret}</code>
-            <Field label="Código de 6 dígitos">
-              <input
-                value={code}
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-            </Field>
-            <button className="button">Verificar y activar</button>
-          </form>
-        )}
+        <KeyRound />
+        <h2>Acceso del personal</h2>
+        <p>
+          Usa una contraseña única y no la compartas. Si necesitas recuperarla,
+          contacta al responsable técnico para verificar tu identidad.
+        </p>
+        <p>
+          El cierre global y la publicación de resultados requieren la
+          aprobación de otra cuenta autorizada.
+        </p>
       </section>
     </>
   );
@@ -2083,7 +1959,6 @@ export function Accounts() {
             <tr>
               <th>Personal</th>
               <th>Rol</th>
-              <th>MFA</th>
               <th>Estado</th>
               <th>Acción</th>
             </tr>
@@ -2096,7 +1971,6 @@ export function Accounts() {
                   <small className="block">{r.email}</small>
                 </td>
                 <td>{r.grants.map((g: any) => g.role).join(", ")}</td>
-                <td>{r.mfaEnabled ? "Activado" : "Pendiente"}</td>
                 <td>{r.active ? "Activa" : "Desactivada"}</td>
                 <td>
                   <button

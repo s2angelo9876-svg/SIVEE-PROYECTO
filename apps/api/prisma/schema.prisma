@@ -168,6 +168,7 @@ model Admin {
   name String
   passwordHash String
   active Boolean @default(true)
+  // Legacy authenticator fields retained for data compatibility; no longer used for access.
   mfaSecret String?
   mfaEnabled Boolean @default(false)
   sessions AdminSession[]

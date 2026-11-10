@@ -21,7 +21,7 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 ## Comprobación antes del viernes
 
 - Selecciona la elección correcta y revisa nombre, padrón habilitado, listas, logos y horarios.
-- Verifica **cero participaciones emitidas y cero votos** antes de la apertura. Comprueba que las dos cuentas de comité accedan con sus respectivos autenticadores.
+- Verifica **cero participaciones emitidas y cero votos** antes de la apertura. Comprueba que las dos cuentas de comité accedan con sus respectivos correos y contraseñas.
 - Realiza las prácticas y la capacitación en el ensayo; no emitas votos de prueba en el proceso definitivo.
 - Cuando todo esté revisado, pulsa **Preparar elección**. Déjala preparada y sus turnos programados hasta que corresponda iniciar la votación.
 - La página pública muestra la elección creada más recientemente que no esté anulada. Después de crear el proceso definitivo, no crees otro ensayo en esta misma instalación: cambiaría la elección que ven los estudiantes.

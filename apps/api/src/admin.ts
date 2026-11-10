@@ -86,11 +86,10 @@ admin.post(
     legacyHeaders: false,
   }),
   async (req, res) => {
-    const { email, password, otp } = z
+    const { email, password } = z
       .object({
         email: z.email(),
         password: z.string().min(1).max(200),
-        otp: z.string().optional(),
       })
       .strict()
       .parse(req.body);
@@ -108,32 +107,19 @@ admin.post(
         "AUTH_FAILED",
         "No pudimos verificar tus credenciales.",
       );
-    if (user.mfaEnabled) {
-      const { verifyTotp } = await import("./mfa.js");
-      if (!otp || !user.mfaSecret || !verifyTotp(user.mfaSecret, otp))
-        throw new AppError(
-          401,
-          "MFA_REQUIRED",
-          "Ingresa el código de tu aplicación de autenticación.",
-        );
-    }
-    const mfaSetupRequired =
-      config.SIVEE_ENV === "production" && !user.mfaEnabled;
     const session = await issueSession(res, "admin", {
       adminId: user.id,
-      purpose: mfaSetupRequired ? "MFA_SETUP" : "FULL",
+      purpose: "FULL",
     });
     await audit(db, user.id, null, "ADMIN_LOGIN");
     res.json({
       data: {
         ...session,
-        mfaSetupRequired,
         user: {
           id: user.id,
           name: user.name,
           email: user.email,
           grants: user.grants,
-          mfaEnabled: user.mfaEnabled,
         },
       },
     });
@@ -149,8 +135,6 @@ admin.get("/me", (_req, res) => {
       name: u.name,
       email: u.email,
       grants: u.grants,
-      mfaEnabled: u.mfaEnabled,
-      mfaSetupRequired: res.locals.adminSession.purpose === "MFA_SETUP",
       csrfToken: res.locals.csrfToken,
     },
   });

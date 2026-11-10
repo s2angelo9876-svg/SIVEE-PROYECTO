@@ -465,3 +465,47 @@ test("Padrón escolar y voto solo con DNI desde un navegador nuevo, sin cabinas 
     await cabina.close();
   }
 });
+
+test("El personal accede sin autenticador y el enlace antiguo abre el panel", async ({
+  page,
+}) => {
+  const url = new URL(process.env.MIGRATION_DATABASE_URL!);
+  url.pathname = "/" + database;
+  const client = new pg.Client({ connectionString: url.toString() });
+  await client.connect();
+  try {
+    for (const enabled of [false, true]) {
+      await client.query(
+        'UPDATE admins SET "mfaEnabled"=$1, "mfaSecret"=$2 WHERE email=$3',
+        [
+          enabled,
+          enabled ? "historical-secret" : null,
+          "observador@sivee.demo",
+        ],
+      );
+      await page.context().clearCookies();
+      await page.goto("/admin/login");
+      await page.getByLabel("Correo electrónico").fill("observador@sivee.demo");
+      await page
+        .getByLabel("Contraseña", { exact: true })
+        .fill("DemoSivee2026!");
+      await expect(page.getByLabel("Código de autenticación")).toHaveCount(0);
+      await page.getByRole("button", { name: "Ingresar al panel" }).click();
+      await expect(page).toHaveURL(origin + "/admin");
+      await expect(
+        page.getByRole("heading", { name: "Cada participación cuenta." }),
+      ).toBeVisible();
+      await page.goto("/activar-cuenta");
+      await expect(page).toHaveURL(origin + "/admin");
+      await page.goto("/admin/seguridad");
+      await expect(
+        page.getByRole("heading", { name: "Acceso del personal" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Configurar autenticación" }),
+      ).toHaveCount(0);
+    }
+  } finally {
+    await client.end();
+  }
+});

@@ -1,3 +1,5 @@
+NOTA DE VIGENCIA (2026-11-10): Este documento conserva la especificación histórica. Las referencias a MFA/TOTP del personal están sustituidas por acceso con correo y contraseña exclusivamente, incluidas cuentas existentes. No se requiere configurar autenticador. La aprobación de cierre global y publicación por otra cuenta autorizada sigue vigente. Véanse docs/API.md y docs/PRODUCCION.md.
+
                                                                                                SIVEE · ESPECIFICACIÓN DE DISEÑO DE SOFTWARE
 
 

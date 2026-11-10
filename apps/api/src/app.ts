@@ -9,7 +9,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db.js";
 import { voter } from "./voter.js";
 import { admin } from "./admin.js";
-import { accountRoutes } from "./mfa.js";
+import { accountRoutes } from "./accounts.js";
 import { config } from "./config.js";
 import { originGuard } from "./auth.js";
 import { AppError } from "./security.js";

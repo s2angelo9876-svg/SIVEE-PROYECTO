@@ -14,7 +14,6 @@ import {
   Incidents,
   Security,
   Accounts,
-  ActivateAccount,
 } from "./Admin";
 import { Roster } from "./Roster";
 import { SiteProvider } from "./Site";
@@ -53,7 +52,10 @@ createRoot(document.getElementById("root")!).render(
             path="/cabina/activar"
             element={<Navigate to="/votar" replace />}
           />
-          <Route path="/activar-cuenta" element={<ActivateAccount />} />
+          <Route
+            path="/activar-cuenta"
+            element={<Navigate to="/admin" replace />}
+          />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<Dashboard />} />

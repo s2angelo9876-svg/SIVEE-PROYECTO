@@ -55,7 +55,7 @@ try {
     await audit(tx, admin.id, null, "INSTALLATION_INITIALIZED");
   });
   console.log(
-    "Instalación creada sin estudiantes ni elecciones de ejemplo. Activa MFA en el primer acceso. Retira INITIAL_ADMIN_PASSWORD del entorno de operaciones.",
+    "Instalación creada sin estudiantes ni elecciones de ejemplo. Ingresa con correo y contraseña. Retira INITIAL_ADMIN_PASSWORD del entorno de operaciones.",
   );
 } catch (error) {
   console.error(

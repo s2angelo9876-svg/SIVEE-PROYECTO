@@ -17,7 +17,7 @@ try {
     .parse(process.env);
   const user = await db.admin.findUnique({
     where: { email: input.INITIAL_ADMIN_EMAIL.toLowerCase() },
-    select: { active: true, passwordHash: true, mfaEnabled: true },
+    select: { active: true, passwordHash: true },
   });
   const [adminCount, institutionCount] = await Promise.all([
     db.admin.count(),
@@ -33,7 +33,6 @@ try {
       passwordMatches: user
         ? await verifyPassword(user.passwordHash, input.INITIAL_ADMIN_PASSWORD)
         : null,
-      mfaEnabled: user?.mfaEnabled ?? null,
       readOnly: true,
     }),
   );

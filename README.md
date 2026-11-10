@@ -1,6 +1,6 @@
 # SIVEE · Votación presencial escolar
 
-La votación usa DNI o matrícula habilitada para estudiantes extranjeros, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con registro automático, separación por turno y altas individuales, MFA administrativo e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
+La votación usa DNI o matrícula habilitada para estudiantes extranjeros, sin registrar equipos, asignar responsables ni solicitar autorización de mesa. Incluye padrón escolar Excel/CSV con registro automático, separación por turno y altas individuales, acceso del personal con correo y contraseña e identidad azul marino, rojo y blanco. Se puede acceder desde cualquier dispositivo con el enlace; conocer un DNI ajeno podría permitir suplantar al estudiante, por lo que el colegio debe supervisar la jornada.
 
 **Instalación oficial en Railway:** sigue [la guía de producción](docs/PRODUCCION.md). El despliegue usa una base vacía, cuentas propias y HTTPS. El escudo original se carga desde Configuración. Las simulaciones existentes mantienen su acceso anterior y sus datos.
 
@@ -81,7 +81,7 @@ Hay 25 electores por turno: documentos `00000001`–`00000050`, códigos `DEMOCO
 - Registro atómico, idempotente y concurrente de votos. La papeleta no contiene identidad ni fecha exacta de emisión.
 - Panel privado de participación por SSE. Resultados bloqueados en servidor hasta cierre, conciliación y publicación.
 - Acta PDF, agregados CSV, resumen JSON canónico con SHA-256, auditoría e incidencias.
-- Roles por institución/elección, sesiones HttpOnly, CSRF, Argon2id, HMAC para documentos, MFA TOTP y cuentas del personal.
+- Roles por institución/elección, sesiones HttpOnly, CSRF, Argon2id, HMAC para documentos, contraseñas y cuentas del personal.
 - Nueva simulación que archiva la anterior sin borrar papeletas.
 - Respaldo cifrado y ensayo de restauración aislada.
 

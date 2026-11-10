@@ -14,7 +14,7 @@ Fuente: `docs/SDD.txt`, extracción del PDF entregado por el usuario. El archivo
 | RF-030/031/033/034     | Acta PDF, CSV/JSON agregados, hash, SSE privado, sin desglose de preferencias por grupos.                                                                       |
 | RF-035–038/041/042     | Sesiones separadas, RBAC/alcance, auditoría administrativa, healthchecks y exportación sin papeletas individuales.                                              |
 | RF-039/040             | Aprobador distinto en OFICIAL; reinicio DEMO archivando la anterior.                                                                                            |
-| P1                     | MFA TOTP, cuentas del personal, incidencias y respaldo cifrado restaurado en instancia lógica aislada.                                                          |
+| P1                     | Acceso con correo y contraseña, cuentas del personal, incidencias y respaldo cifrado restaurado en instancia lógica aislada.                                                          |
 
 ## Decisiones concretas de esta implementación
 
@@ -32,7 +32,7 @@ Fuente: `docs/SDD.txt`, extracción del PDF entregado por el usuario. El archivo
 - Aprobación legal/institucional, reglas de voto nulo, actas firmadas y proclamación: corresponden a las autoridades, no se inventan.
 - Despliegue público HTTPS, dominio, conectividad desde el colegio y prueba de energía/red: requieren infraestructura final.
 - Multitenencia comercial, personalización de logos subidos, aperturas automáticas y recuentos con nuevas versiones tras publicar: no forman parte del recorrido entregado. Se mantiene el acta publicada inmutable.
-- La configuración de cuentas/MFA está implementada; su operación con personal real, recuperación de factores y revisión independiente deben validarse antes del uso oficial.
+- La configuración de cuentas está implementada; su operación con personal real, recuperación de contraseñas y revisión independiente deben validarse antes del uso oficial.
 - No hay secreto de voto E2E ni protección frente a administrador hostil del servidor/WAL.
 - No se promete RPO=0, replicación, PITR, HA o disponibilidad contractual. El respaldo local cifrado debe copiarse fuera de la máquina y su clave custodiarse separadamente.
 - La comprobación automática de accesibilidad cubre pantallas principales; no sustituye evaluación manual con lector de pantalla, teclado y usuarios.

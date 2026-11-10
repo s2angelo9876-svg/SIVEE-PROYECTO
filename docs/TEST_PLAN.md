@@ -57,7 +57,7 @@ Evidencia del arranque: `artifacts/npm-start-results.json`. Se añadió un job d
 - Fallo forzado en INSERT: rollback de la actualización de participación. El log INTERNAL_ERROR de esa prueba es esperado; no se trata como prueba fallida.
 - Conciliación P≠V: publicación bloqueada; test reestableció los fixtures únicamente en la base temporal.
 - Restricciones SQL: urna sin columnas de identidad/fecha; UPDATE y DELETE denegados al rol API.
-- CSRF, origen externo, permisos verticales, institución ajena, embargo en API/SSE, credencial incompleta, expiración, duplicados CSV, MFA y repetición del seed: aprobados.
+- CSRF, origen externo, permisos verticales, institución ajena, embargo en API/SSE, credencial incompleta, expiración, duplicados CSV, acceso del personal y repetición del seed: aprobados.
 
 ## Evidencias para mostrar
 

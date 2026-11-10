@@ -12,7 +12,7 @@ Se conservan dependencias, archivos y volumen de PostgreSQL; los procesos se rei
 
 `.env.example` describe el contrato. `setup:demo` genera `.env` con permisos 0600 y claves aleatorias. No sobreescribe valores existentes. `DATABASE_URL` usa `sivee_app`, sin superusuario; `MIGRATION_DATABASE_URL` usa el propietario y solo se usa para migración y operaciones. El proceso API no debe recibir credenciales de migración en un despliegue oficial.
 
-La clave HMAC de DNI no puede rotarse arbitrariamente: las búsquedas dejarían de coincidir. `SESSION_PEPPER` también protege secretos MFA; su rotación requiere un plan. No imprimas el entorno ni subas `.env`, credenciales, tokens o respaldos sin cifrar a Git.
+La clave HMAC de DNI no puede rotarse arbitrariamente: las búsquedas dejarían de coincidir. La rotación de `SESSION_PEPPER` requiere un plan para las sesiones y los datos históricos. No imprimas el entorno ni subas `.env`, credenciales, tokens o respaldos sin cifrar a Git.
 
 ## Estado electoral
 
@@ -41,7 +41,7 @@ Nunca restaures sobre la elección activa como primer recurso. Restaura en una b
 
 ## Requisitos del despliegue oficial
 
-Usar base separada, cuentas sin fixtures, MFA, secretos seguros, HTTPS y cookies Secure, reglas institucionales documentadas, backups fuera del servidor y ensayo de recuperación/red eléctrica. En el modo oficial se exige la referencia en **Configuración → Referencia de autorización institucional** de esa elección; se guarda desde el panel y no certifica por sí sola una autorización. La separación de servidores, la custodia de esa referencia y los roles deben validarse fuera de la aplicación.
+Usar base separada, cuentas sin fixtures, correo y contraseña personales, secretos seguros, HTTPS y cookies Secure, reglas institucionales documentadas, backups fuera del servidor y ensayo de recuperación/red eléctrica. En el modo oficial se exige la referencia en **Configuración → Referencia de autorización institucional** de esa elección; se guarda desde el panel y no certifica por sí sola una autorización. La separación de servidores, la custodia de esa referencia y los roles deben validarse fuera de la aplicación.
 
 ## Revisión de evidencias
 

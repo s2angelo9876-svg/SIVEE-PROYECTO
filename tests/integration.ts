@@ -478,10 +478,44 @@ try {
   await post("/windows/MANANA/close", { reason: "Fin del primer turno" });
   await post("/windows/TARDE/open", { reason: "Inicio del segundo turno" });
   await post("/windows/TARDE/close", { reason: "Fin del segundo turno" });
+  // Exercise the official two-person rule with password-only accounts.
+  const second = await request(
+    "/admin/accounts",
+    "POST",
+    {
+      name: "Segunda Autoridad Sintética",
+      email: "segunda@sivee.demo",
+      password: "DemoSivee2026!",
+      role: "COMITE",
+      electionScope: id,
+    },
+    tech,
+  );
+  assert.equal(second.status, 200);
+  const approver = await login("segunda@sivee.demo");
+  await connection!.query("UPDATE elections SET mode='OFICIAL' WHERE id=$1", [
+    id,
+  ]);
   const close = await post("/close-request", {
     reason: "Finalización de la prueba",
   });
-  await post("/close-approve", { approvalId: close.id });
+  await check(
+    "Cierre oficial exige dos cuentas distintas sin autenticador",
+    async () => {
+      assert.equal(
+        (
+          await request(
+            route + "/close-approve",
+            "POST",
+            { approvalId: close.id },
+            committee,
+          )
+        ).status,
+        409,
+      );
+      await post("/close-approve", { approvalId: close.id }, approver);
+    },
+  );
   await check("Cerrada aún no expone preferencias", async () =>
     assert.equal(
       (await request(route + "/results", "GET", undefined, committee)).status,
@@ -511,7 +545,28 @@ try {
   const publish = await post("/publish-request", {
     reason: "Publicación de resultados conciliados",
   });
-  await post("/publish-approve", { approvalId: publish.id });
+  await check(
+    "Publicación oficial exige dos cuentas distintas sin autenticador",
+    async () => {
+      assert.equal(
+        (
+          await request(
+            route + "/publish-approve",
+            "POST",
+            { approvalId: publish.id },
+            committee,
+          )
+        ).status,
+        409,
+      );
+      await post("/publish-approve", { approvalId: publish.id }, approver);
+      const records = await db.approval.findMany({
+        where: { electionId: id, state: "APPROVED" },
+      });
+      assert.equal(records.length, 2);
+      assert.ok(records.every((a: any) => a.requesterId !== a.approverId));
+    },
+  );
   await check(
     "Publicación: 50 = 38 válidos + 7 blancos + 5 nulos",
     async () => {
@@ -610,41 +665,10 @@ try {
     assert.equal((await vote(sessions[1], { kind: "BLANCO" })).status, 401);
   });
   await check(
-    "MFA TOTP: registro y exigencia del segundo factor administrativo",
+    "Las rutas retiradas del autenticador no están disponibles",
     async () => {
-      const setup = await request(
-        "/admin/mfa/setup",
-        "POST",
-        { password: "DemoSivee2026!" },
-        committee,
-      );
-      assert.equal(setup.status, 200);
-      const { totp } = await import("../apps/api/src/mfa.js");
-      const code = totp(setup.data.data.secret, Math.floor(Date.now() / 30000));
-      assert.equal(
-        (await request("/admin/mfa/confirm", "POST", { code }, committee))
-          .status,
-        200,
-      );
-      assert.equal(
-        (
-          await request("/admin/auth/login", "POST", {
-            email: "comite@sivee.demo",
-            password: "DemoSivee2026!",
-          })
-        ).status,
-        401,
-      );
-      assert.equal(
-        (
-          await request("/admin/auth/login", "POST", {
-            email: "comite@sivee.demo",
-            password: "DemoSivee2026!",
-            otp: code,
-          })
-        ).status,
-        200,
-      );
+      for (const path of ["/admin/mfa/setup", "/admin/mfa/confirm"])
+        assert.equal((await request(path, "POST", {}, committee)).status, 404);
     },
   );
   await check(

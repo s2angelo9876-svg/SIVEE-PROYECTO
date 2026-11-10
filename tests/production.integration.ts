@@ -122,7 +122,7 @@ try {
   }
   const initialLogin = await login(env.INITIAL_ADMIN_PASSWORD);
   assert.equal(initialLogin.status, 200);
-  assert.equal((await initialLogin.json()).data.mfaSetupRequired, true);
+  assert.equal((await initialLogin.json()).data.mfaSetupRequired, undefined);
   assert.equal((await login("UnaClaveDistintaParaElEnsayo123!")).status, 401);
 
   assert.throws(

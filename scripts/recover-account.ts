@@ -38,7 +38,7 @@ try {
     });
   });
   console.log(
-    "Cuenta recuperada y sesiones revocadas. Verifica al titular, entrega la contraseña de forma privada y registra MFA de nuevo. Retira RECOVERY_PASSWORD del entorno.",
+    "Cuenta recuperada y sesiones revocadas. Verifica al titular, entrega la contraseña de forma privada e ingresa con correo y contraseña. Retira RECOVERY_PASSWORD del entorno.",
   );
 } catch {
   console.error(
