@@ -40,7 +40,7 @@ Orden de bloqueo: elección → ventana → participación. Emisión usa FOR SHA
 
 Los endpoints de preferencias usan una guarda de PUBLICADA y verifican el hash del acta. Ningún desglose de preferencias por turno/grupo pequeño se exporta. Los permisos se comprueban en servidor por institución y alcance de elección.
 
-Configuración adicional: `GET/PATCH /admin/institution` y `PATCH /admin/elections/:id/windows/:shift` con `{startsAt,endsAt}` (ISO UTC o null), solo en BORRADOR.
+Configuración adicional: `GET /admin/institution` devuelve el colegio compartido y `identityLocked`, que indica si ya existen elecciones iniciadas o finalizadas. `PATCH /admin/institution` recibe `{name,code}`; un guardado sin cambios devuelve 200 y no añade `INSTITUTION_UPDATED`, incluso tras un ensayo publicado. Cambiar realmente nombre/código se rechaza con 409 si `identityLocked` es true; no es necesario volver a guardarlos para crear otra elección. Mantiene los permisos institucionales existentes. `PATCH /admin/elections/:id/windows/:shift` recibe `{startsAt,endsAt}` (ISO UTC o null) y requiere que esa elección esté en BORRADOR, independientemente del historial de otras elecciones.
 
 ## Padrón
 

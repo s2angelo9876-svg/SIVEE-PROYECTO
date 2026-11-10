@@ -2136,6 +2136,8 @@ function InstitutionSchedule({
       : "";
   useEffect(() => {
     onPendingChanges(false);
+    setError("");
+    setMessage("");
     api("/admin/institution")
       .then(setInstitution)
       .catch((e) => setError(e.message));
@@ -2190,10 +2192,11 @@ function InstitutionSchedule({
             setBusy(true);
             setError("");
             try {
-              await api("/admin/institution", {
+              const saved = await api("/admin/institution", {
                 method: "PATCH",
                 body: { name: institution.name, code: institution.code },
               });
+              setInstitution(saved);
               await refresh();
               setMessage("Institución guardada.");
               await site.refresh();
@@ -2204,7 +2207,21 @@ function InstitutionSchedule({
             }
           }}
         >
-          <fieldset disabled={election.state !== "BORRADOR" || busy}>
+          {institution.identityLocked && (
+            <p>
+              El nombre y código del colegio ya están guardados y se conservan
+              para las elecciones anteriores. La nueva elección los utiliza
+              automáticamente; puedes continuar con su padrón, listas y
+              horarios.
+            </p>
+          )}
+          <fieldset
+            disabled={
+              election.state !== "BORRADOR" ||
+              busy ||
+              institution.identityLocked
+            }
+          >
             <div className="two-columns">
               <Field label="Nombre de la institución">
                 <input
@@ -2227,7 +2244,9 @@ function InstitutionSchedule({
                 />
               </Field>
             </div>
-            <button className="button secondary">Guardar institución</button>
+            {!institution.identityLocked && (
+              <button className="button secondary">Guardar institución</button>
+            )}
           </fieldset>
         </form>
       )}

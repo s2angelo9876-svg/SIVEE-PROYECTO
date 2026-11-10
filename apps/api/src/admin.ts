@@ -150,12 +150,25 @@ admin.post("/auth/logout", async (_req, res) => {
   res.clearCookie("sivee_admin", cookieOptions);
   res.json({ data: { ok: true } });
 });
+async function institutionIdentityLocked(tx: Tx, institutionId: string) {
+  return (
+    (await tx.election.count({
+      where: {
+        institutionId,
+        state: {
+          in: ["EN_CURSO", "PAUSADA", "CERRADA", "CONCILIADA", "PUBLICADA"],
+        },
+      },
+    })) > 0
+  );
+}
 admin.get("/institution", permit("elections:read"), async (_req, res) => {
-  res.json({
-    data: await db.institution.findUniqueOrThrow({
-      where: { id: res.locals.admin.institutionId },
-    }),
-  });
+  const institutionId = res.locals.admin.institutionId;
+  const [institution, identityLocked] = await Promise.all([
+    db.institution.findUniqueOrThrow({ where: { id: institutionId } }),
+    institutionIdentityLocked(db, institutionId),
+  ]);
+  res.json({ data: { ...institution, identityLocked } });
 });
 admin.post(
   "/institution/crest",
@@ -224,24 +237,26 @@ admin.patch("/institution", permit("elections:write"), async (req, res) => {
     .strict()
     .parse(req.body);
   const result = await db.$transaction(async (tx) => {
-    const opened = await tx.election.count({
-      where: {
-        institutionId: res.locals.admin.institutionId,
-        state: {
-          in: ["EN_CURSO", "PAUSADA", "CERRADA", "CONCILIADA", "PUBLICADA"],
-        },
-      },
+    const institutionId = res.locals.admin.institutionId;
+    await tx.$queryRaw`SELECT id FROM institutions WHERE id=${institutionId}::uuid FOR UPDATE`;
+    const current = await tx.institution.findUniqueOrThrow({
+      where: { id: institutionId },
     });
+    const identityLocked = await institutionIdentityLocked(tx, institutionId);
+    // Existing clients may submit the shared identity again for a new draft.
+    // An unchanged save neither mutates history nor creates a misleading audit event.
+    if (current.name === input.name && current.code === input.code)
+      return { ...current, identityLocked };
     requireState(
-      opened === 0,
-      "La institución no puede cambiar durante una jornada iniciada.",
+      !identityLocked,
+      "El nombre y código del colegio se conservan porque ya existen elecciones iniciadas o finalizadas. No necesitas modificarlos para configurar una nueva elección.",
     );
     const r = await tx.institution.update({
       where: { id: res.locals.admin.institutionId },
       data: input,
     });
     await audit(tx, res.locals.admin.id, null, "INSTITUTION_UPDATED");
-    return r;
+    return { ...r, identityLocked: false };
   });
   res.json({ data: result });
 });

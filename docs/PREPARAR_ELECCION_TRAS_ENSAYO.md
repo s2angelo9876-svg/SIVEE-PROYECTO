@@ -12,6 +12,8 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 
 Si guardaste una copia después de cargar padrón y listas, puedes usar **Configuración → Copias de configuración → Recuperar como nueva elección** para crear el proceso sin volver a importar esos datos. Conserva el ensayo y sus votos. Revisa nombre, autorización, horarios y cero votos antes de preparar. No copia cambios posteriores al punto guardado. Véase [Copias de configuración](COPIAS_CONFIGURACION.md).
 
+El nombre y código del colegio se reutilizan automáticamente en la nueva elección. Si ya hubo una elección iniciada o finalizada, el panel los muestra conservados: no hay que pulsar **Guardar institución** otra vez. Usa **Guardar configuración** para los datos del nuevo proceso y **Guardar horarios** para sus turnos.
+
 ## Crear el proceso real desde el panel
 
 1. En **Configuración → Nueva elección**, crea un proceso con un nombre inequívoco, por ejemplo **Municipio Escolar · Viernes 13 de noviembre de 2026**. En la instalación de producción se crea como elección oficial en borrador.
