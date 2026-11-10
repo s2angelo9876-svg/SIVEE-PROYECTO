@@ -835,11 +835,12 @@ export function ElectionDay() {
               title: "Publicación autorizada",
               desc: requiresDistinctApprover(election.mode, "publish")
                 ? "Habilita los resultados y el acta a personal autorizado. Requiere la aprobación de otra cuenta autorizada."
-                : "Habilita los resultados y el acta a personal autorizado.",
+                : "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar la publicación después de conciliar la elección.",
               done: election.state === "PUBLICADA",
               action: pending("publish") ? (
                 <button
                   className="button"
+                  disabled={!can("results:approve")}
                   onClick={() =>
                     request(
                       "publish-approve",
@@ -1925,8 +1926,9 @@ export function Security() {
           {requiresDistinctApprover("OFICIAL", "close")
             ? "El cierre global requiere la aprobación de otra cuenta autorizada."
             : "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar el cierre global."}{" "}
-          La publicación de resultados oficiales requiere la aprobación de otra
-          cuenta autorizada.
+          {requiresDistinctApprover("OFICIAL", "publish")
+            ? "La publicación de resultados oficiales requiere la aprobación de otra cuenta autorizada."
+            : "Temporalmente, esa misma cuenta puede solicitar y aprobar la publicación de resultados después de conciliar la elección."}
         </p>
       </section>
     </>

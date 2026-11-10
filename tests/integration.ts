@@ -478,7 +478,7 @@ try {
   await post("/windows/MANANA/close", { reason: "Fin del primer turno" });
   await post("/windows/TARDE/open", { reason: "Inicio del segundo turno" });
   await post("/windows/TARDE/close", { reason: "Fin del segundo turno" });
-  // Single-account closure is temporary; official publication still needs two accounts.
+  // The temporary exception covers closure and publication with password-only accounts.
   const second = await request(
     "/admin/accounts",
     "POST",
@@ -492,7 +492,7 @@ try {
     tech,
   );
   assert.equal(second.status, 200);
-  const approver = await login("segunda@sivee.demo");
+  await login("segunda@sivee.demo");
   await connection!.query("UPDATE elections SET mode='OFICIAL' WHERE id=$1", [
     id,
   ]);
@@ -604,6 +604,19 @@ try {
       [participations[0].id],
     );
   });
+  await check("Publicación sigue bloqueada antes de conciliar", async () => {
+    assert.equal(
+      (
+        await request(
+          route + "/publish-request",
+          "POST",
+          { reason: "Intento anterior a la conciliación" },
+          committee,
+        )
+      ).status,
+      409,
+    );
+  });
   await post("/reconcile");
   await check("Conciliada sigue reservada", async () =>
     assert.equal(
@@ -615,8 +628,56 @@ try {
     reason: "Publicación de resultados conciliados",
   });
   await check(
-    "Publicación oficial exige dos cuentas distintas sin autenticador",
+    "Publicación oficial temporal permite la misma cuenta y conserva permisos, integridad y auditoría",
     async () => {
+      for (const unauthorized of [observer, tech]) {
+        assert.equal(
+          (
+            await request(
+              route + "/publish-request",
+              "POST",
+              { reason: "Intento sin permiso de publicación" },
+              unauthorized,
+            )
+          ).status,
+          403,
+        );
+        assert.equal(
+          (
+            await request(
+              route + "/publish-approve",
+              "POST",
+              { approvalId: publish.id },
+              unauthorized,
+            )
+          ).status,
+          403,
+        );
+      }
+      assert.equal(
+        (
+          await request(
+            route + "/publish-approve",
+            "POST",
+            { approvalId: crypto.randomUUID() },
+            committee,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (await db.election.findUniqueOrThrow({ where: { id } })).state,
+        "CONCILIADA",
+      );
+      // Even the single-account exception cannot publish a tampered report.
+      const report = await db.report.findFirstOrThrow({
+        where: { electionId: id },
+        orderBy: { version: "desc" },
+      });
+      await connection!.query("UPDATE reports SET sha256=$1 WHERE id=$2", [
+        "synthetic-invalid-digest",
+        report.id,
+      ]);
       assert.equal(
         (
           await request(
@@ -628,20 +689,58 @@ try {
         ).status,
         409,
       );
-      await post("/publish-approve", { approvalId: publish.id }, approver);
+      assert.equal(
+        (await db.approval.findUniqueOrThrow({ where: { id: publish.id } }))
+          .state,
+        "PENDING",
+      );
+      await connection!.query("UPDATE reports SET sha256=$1 WHERE id=$2", [
+        report.sha256,
+        report.id,
+      ]);
+      await post("/publish-approve", { approvalId: publish.id });
       const records = await db.approval.findMany({
         where: { electionId: id, state: "APPROVED" },
       });
       assert.equal(records.length, 2);
-      const publication = records.find((a: any) => a.type === "publish");
-      const closure = records.find((a: any) => a.type === "close");
-      assert.notEqual(publication.requesterId, publication.approverId);
-      assert.equal(closure.requesterId, closure.approverId);
-      const audit = await db.audit.findFirstOrThrow({
-        where: { electionId: id, action: "PUBLISH_APPROVED" },
+      assert.ok(records.every((a: any) => a.requesterId === a.approverId));
+      const events = await db.audit.findMany({
+        where: {
+          electionId: id,
+          action: { in: ["PUBLISH_REQUESTED", "PUBLISH_APPROVED"] },
+        },
       });
-      assert.equal(audit.detail.distinctAccountRequired, true);
-      assert.equal(audit.detail.sameAccountApproval, false);
+      assert.equal(events.length, 2);
+      const publication = records.find((a: any) => a.type === "publish");
+      assert.ok(
+        events.every(
+          (event: any) =>
+            event.adminId === publication.requesterId &&
+            event.detail.distinctAccountRequired === false,
+        ),
+      );
+      const audit = events.find(
+        (event: any) => event.action === "PUBLISH_APPROVED",
+      );
+      assert.equal(audit.detail.approvalId, publish.id);
+      assert.equal(audit.detail.sameAccountApproval, true);
+      assert.equal(
+        (
+          await request(
+            route + "/publish-approve",
+            "POST",
+            { approvalId: publish.id },
+            committee,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        await db.audit.count({
+          where: { electionId: id, action: "PUBLISH_APPROVED" },
+        }),
+        1,
+      );
     },
   );
   await check(

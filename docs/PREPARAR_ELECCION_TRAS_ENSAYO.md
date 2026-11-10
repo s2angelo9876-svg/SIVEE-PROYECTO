@@ -21,10 +21,10 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 ## Comprobación antes del viernes
 
 - Selecciona la elección correcta y revisa nombre, padrón habilitado, listas, logos y horarios.
-- Verifica **cero participaciones emitidas y cero votos** antes de la apertura. Comprueba que las dos cuentas de comité accedan con sus respectivos correos y contraseñas.
+- Verifica **cero participaciones emitidas y cero votos** antes de la apertura. Comprueba que tu cuenta autorizada de comité acceda con correo y contraseña. Durante la excepción temporal, esa misma cuenta puede solicitar y aprobar el cierre y la publicación.
 - Realiza las prácticas y la capacitación en el ensayo; no emitas votos de prueba en el proceso definitivo.
 - Cuando todo esté revisado, pulsa **Preparar elección**. Déjala preparada y sus turnos programados hasta que corresponda iniciar la votación.
 - La página pública muestra la elección creada más recientemente que no esté anulada. Después de crear el proceso definitivo, no crees otro ensayo en esta misma instalación: cambiaría la elección que ven los estudiantes.
-- El viernes, el comité abre manualmente el turno en **Jornada electoral**. Al finalizar ambos turnos: cierre global temporalmente con una cuenta autorizada, conciliación y publicación aprobada por otra cuenta; luego descarga del acta.
+- El viernes, el comité abre manualmente el turno en **Jornada electoral**. Al finalizar ambos turnos: cierre global con una cuenta autorizada, conciliación y publicación solicitada y aprobada temporalmente por esa misma cuenta; luego descarga del acta.
 
 Este procedimiento se realiza desde el panel. No requiere volver a ejecutar el inicializador de producción ni cambiar las claves del despliegue. Los logos ampliados se aplican a las imágenes ya guardadas al desplegar la nueva versión; no es necesario volver a subirlos en el ensayo.

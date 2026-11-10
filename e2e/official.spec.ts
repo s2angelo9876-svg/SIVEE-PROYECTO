@@ -539,7 +539,7 @@ test("El personal accede sin autenticador y el enlace antiguo abre el panel", as
   }
 });
 
-test("Una cuenta puede aprobar su cierre oficial pendiente sin publicar resultados", async ({
+test("Una cuenta puede cerrar y publicar su elección oficial después de conciliar", async ({
   page,
 }) => {
   await page.goto("/admin/login");
@@ -624,6 +624,58 @@ test("Una cuenta puede aprobar su cierre oficial pendiente sin publicar resultad
     await expect(
       page.getByRole("button", { name: "Conciliar elección", exact: true }),
     ).toBeEnabled();
+    await expect(
+      page.getByText(
+        "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar la publicación después de conciliar la elección.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Solicitar publicación", exact: true }),
+    ).toBeDisabled();
+    await page
+      .getByRole("button", { name: "Conciliar elección", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirmar acción", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Solicitar publicación", exact: true }),
+    ).toBeEnabled();
+    expect((await page.request.get(root + "/results")).status()).toBe(403);
+    await page
+      .getByRole("button", { name: "Solicitar publicación", exact: true })
+      .click();
+    await page
+      .getByLabel("Motivo de la operación")
+      .fill("Publicación de resultados sintéticos conciliados");
+    await page
+      .getByRole("button", { name: "Confirmar acción", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Aprobar publicación", exact: true }),
+    ).toBeEnabled();
+    // The request remains actionable after reloading with the same account.
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Aprobar publicación", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirmar acción", exact: true })
+      .click();
+    await expect(
+      page.getByText("La acción fue registrada correctamente."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Aprobar publicación", exact: true }),
+    ).toHaveCount(0);
+    expect((await page.request.get(root + "/results")).status()).toBe(200);
+    const publication = await client.query(
+      'SELECT state, "requesterId", "approverId" FROM approvals WHERE "electionId"=$1 AND type=$2',
+      [election.id, "publish"],
+    );
+    expect(publication.rows[0].state).toBe("APPROVED");
+    expect(publication.rows[0].requesterId).toBe(me.id);
+    expect(publication.rows[0].approverId).toBe(me.id);
   } finally {
     await client.end();
   }
