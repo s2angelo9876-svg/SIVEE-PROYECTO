@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { readListLogo } from "./list-logo";
 import { ElectionCopies } from "./ElectionCopies";
+import { subscribeTurnout } from "./live-turnout";
 import { requiresDistinctApprover } from "../../../packages/shared/approval-policy";
 import {
   LayoutDashboard,
@@ -391,19 +392,19 @@ export function Dashboard() {
   useEffect(() => {
     if (!id || !can("turnout:read")) return;
     setP(undefined);
-    api(`/admin/elections/${id}/turnout`)
-      .then(setP)
-      .catch((e) => setError(e.message));
-    const source = new EventSource(`/api/v1/admin/elections/${id}/events`);
-    source.addEventListener("turnout.updated", (event: any) => {
-      const d = JSON.parse(event.data);
-      setP(d);
-      setConnection("En vivo");
-      setTime(dateFormat(new Date()));
-      if (d.state !== election.state) void refresh();
+    setError("");
+    return subscribeTurnout({
+      path: `/admin/elections/${id}`,
+      terminal: ["PUBLICADA", "ANULADA"].includes(election.state),
+      onData(d) {
+        setP(d);
+        setTime(dateFormat(new Date()));
+        if (d.state && d.state !== election.state)
+          void refresh().catch((e: any) => setError(e.message));
+      },
+      onConnection: setConnection,
+      onError: setError,
     });
-    source.onerror = () => setConnection("Reconectando");
-    return () => source.close();
   }, [id, election?.state]);
   if (!can("turnout:read"))
     return (

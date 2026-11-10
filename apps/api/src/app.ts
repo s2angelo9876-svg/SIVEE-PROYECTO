@@ -143,7 +143,16 @@ app.use("/api", (_req, res) =>
 );
 const frontend = path.resolve("apps/web/dist");
 if (fs.existsSync(frontend)) {
-  app.use(express.static(frontend, { index: false }));
+  app.use(
+    express.static(frontend, {
+      index: false,
+      setHeaders(res, file) {
+        // Vite names these files by content hash; private API responses stay no-store.
+        if (file.startsWith(path.join(frontend, "assets") + path.sep))
+          res.set("Cache-Control", "public, max-age=31536000, immutable");
+      },
+    }),
+  );
   app.get("/{*path}", (_req, res) => {
     res.set("Cache-Control", "no-store");
     res.sendFile(path.join(frontend, "index.html"));

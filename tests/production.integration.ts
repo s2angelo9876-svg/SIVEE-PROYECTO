@@ -120,6 +120,25 @@ try {
       body: JSON.stringify({ email: env.INITIAL_ADMIN_EMAIL, password }),
     });
   }
+  const origin = new URL(base).origin;
+  const htmlResponse = await fetch(origin + "/");
+  assert.equal(htmlResponse.headers.get("cache-control"), "no-store");
+  const html = await htmlResponse.text();
+  const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+)"/g)];
+  assert.ok(assets.length >= 2);
+  for (const asset of assets) {
+    const response = await fetch(origin + asset[1]);
+    assert.equal(response.status, 200);
+    assert.equal(
+      response.headers.get("cache-control"),
+      "public, max-age=31536000, immutable",
+    );
+  }
+  assert.ok(
+    (await fetch(base + "/health/ready")).headers
+      .get("cache-control")
+      ?.includes("no-store"),
+  );
   const initialLogin = await login(env.INITIAL_ADMIN_PASSWORD);
   assert.equal(initialLogin.status, 200);
   assert.equal((await initialLogin.json()).data.mfaSetupRequired, undefined);

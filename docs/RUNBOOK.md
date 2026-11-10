@@ -46,3 +46,16 @@ Usar base separada, cuentas sin fixtures, correo y contraseña personales, secre
 ## Revisión de evidencias
 
 Consulta fecha y resultado de cada JSON en artifacts. Las pruebas de integración son aisladas y se autolimpian; las E2E usan únicamente DEMO. No atribuyas a una versión nueva los resultados de una ejecución antigua.
+
+## Respuestas 429 en el panel o en recursos estáticos
+
+Un 429 significa que un servidor o intermediario limitó las solicitudes. No demuestra por sí solo agotamiento de memoria/CPU ni exige reiniciar la base. En SIVEE los límites de la aplicación protegen los intentos de ingreso del personal y estudiantes; no hay un límite global de la API, CSS o favicon. Si esas rutas también reciben 429, revisar la respuesta y cabeceras del proveedor o de la conexión usada por el navegador.
+
+1. Evitar recargas repetidas y cerrar pestañas duplicadas. Respetar `Retry-After`; si falta, esperar un minuto.
+2. Comparar el enlace directo de Railway en un navegador normal con la vista previa. Una respuesta correcta desde otra conexión no identifica por sí sola el origen del 429 que vio el usuario.
+3. Si persiste, registrar hora, ruta, estado, texto de respuesta y, si existen, `Retry-After` y `x-railway-request-id`. No incluir cookies, contraseñas ni tokens. Correlacionar con HTTP Logs y métricas de Railway para distinguir aplicación, borde del proveedor y otro intermediario.
+4. Si una creación no se confirmó, comprobar la lista de elecciones antes de enviar otra creación. No borrar votos, cuentas ni elecciones para resolver un 429.
+
+El cliente reconoce respuestas 429 de texto/HTML y JSON, muestra la pausa y no repite automáticamente las escrituras. La participación espera a la primera consulta antes de abrir SSE; los fallos usan pausas de 15, 30, 60 y hasta 120 segundos, respetando un `Retry-After` mayor en la consulta. Al salir del panel cancela la reconexión y una elección publicada/anulada no mantiene SSE. Las sesiones vencidas o sin permisos no generan reintentos continuos.
+
+Los assets con hash generados por Vite usan caché pública de un año e `immutable`; el HTML y los datos privados de la API conservan `no-store`. Una nueva compilación cambia los nombres con hash para cargar la revisión correcta. Estas medidas reducen solicitudes evitables; no sustituyen el diagnóstico del proveedor si vuelve a aplicar un límite.

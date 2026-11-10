@@ -23,6 +23,7 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public status: number,
+    public retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -57,16 +58,28 @@ export async function api<T = any>(
       0,
     );
   }
-  const result = await response.json().catch(() => ({
-    error: {
-      code: "UNAVAILABLE",
-      message: "El servidor no está disponible. Inténtalo de nuevo.",
-    },
-  }));
-  if (!response.ok)
+  const result = await response.json().catch(() => null);
+  if (response.status === 429) {
+    const header = response.headers.get("Retry-After");
+    const value = header === null ? NaN : Number(header);
+    const seconds = Number.isFinite(value)
+      ? Math.max(1, Math.ceil(value))
+      : header && Number.isFinite(Date.parse(header))
+        ? Math.max(1, Math.ceil((Date.parse(header) - Date.now()) / 1000))
+        : 60;
     throw new ApiError(
-      result.error?.code || "ERROR",
-      result.error?.message || "No se pudo completar la operación.",
+      result?.error?.code || "RATE_LIMITED",
+      result?.error?.message ||
+        `Demasiadas solicitudes. Espera ${seconds} segundos antes de volver a intentar.`,
+      429,
+      seconds,
+    );
+  }
+  if (!response.ok || !result)
+    throw new ApiError(
+      result?.error?.code || "UNAVAILABLE",
+      result?.error?.message ||
+        "El servidor no está disponible. Inténtalo de nuevo.",
       response.status,
     );
   return result.data;
