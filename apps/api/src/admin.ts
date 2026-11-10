@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requiresDistinctApprover } from "../../../packages/shared/approval-policy.js";
 import { z } from "zod";
 import { rateLimit } from "express-rate-limit";
 import PDFDocument from "pdfkit";
@@ -548,6 +549,7 @@ for (const type of ["close", "publish"] as const) {
           res.locals.admin.id,
           e.id,
           type.toUpperCase() + "_REQUESTED",
+          { distinctAccountRequired: requiresDistinctApprover(e.mode, type) },
         );
         return a;
       });
@@ -568,7 +570,8 @@ for (const type of ["close", "publish"] as const) {
           where: { id: approvalId, electionId: e.id, type, state: "PENDING" },
         });
         requireState(!!a, "No hay una solicitud pendiente válida.");
-        if (e.mode === "OFICIAL")
+        const distinctAccountRequired = requiresDistinctApprover(e.mode, type);
+        if (distinctAccountRequired)
           requireState(
             a!.requesterId !== res.locals.admin.id,
             "La aprobación requiere otra autoridad.",
@@ -618,7 +621,11 @@ for (const type of ["close", "publish"] as const) {
           res.locals.admin.id,
           e.id,
           type.toUpperCase() + "_APPROVED",
-          { approvalId },
+          {
+            approvalId,
+            distinctAccountRequired,
+            sameAccountApproval: a!.requesterId === res.locals.admin.id,
+          },
         );
         return { ok: true };
       });

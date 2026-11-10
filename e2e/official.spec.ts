@@ -538,3 +538,93 @@ test("El personal accede sin autenticador y el enlace antiguo abre el panel", as
     await client.end();
   }
 });
+
+test("Una cuenta puede aprobar su cierre oficial pendiente sin publicar resultados", async ({
+  page,
+}) => {
+  await page.goto("/admin/login");
+  await page.getByLabel("Correo electrónico").fill("comite@sivee.demo");
+  await page.getByLabel("Contraseña", { exact: true }).fill("DemoSivee2026!");
+  await page.getByRole("button", { name: "Ingresar al panel" }).click();
+  await expect(page).toHaveURL(origin + "/admin");
+  const me = (
+    await (await page.request.get(origin + "/api/v1/admin/me")).json()
+  ).data;
+  const headers = { Origin: origin, "X-CSRF-Token": me.csrfToken };
+  const create = await page.request.post(origin + "/api/v1/admin/elections", {
+    headers,
+    data: {
+      name: "Cierre temporal con una cuenta",
+      year: 2027,
+      scope: "Municipio escolar",
+      blankAllowed: true,
+      nullAllowed: true,
+      regulation: "Reglamento sintético del cierre temporal",
+      contact: "Comité sintético",
+      shifts: ["MANANA", "TARDE"],
+    },
+  });
+  expect(create.status()).toBe(201);
+  const election = (await create.json()).data;
+  const url = new URL(process.env.MIGRATION_DATABASE_URL!);
+  url.pathname = "/" + database;
+  const client = new pg.Client({ connectionString: url.toString() });
+  await client.connect();
+  try {
+    // Synthetic official election with both shifts already finished.
+    await client.query(
+      "UPDATE elections SET mode='OFICIAL', state='PAUSADA' WHERE id=$1",
+      [election.id],
+    );
+    await client.query(
+      "UPDATE windows SET state='CERRADA' WHERE \"electionId\"=$1",
+      [election.id],
+    );
+    const root = origin + "/api/v1/admin/elections/" + election.id;
+    // A pending request already exists, as in the user's current election.
+    const pending = await page.request.post(root + "/close-request", {
+      headers,
+      data: { reason: "Fin del ensayo sintético con una sola cuenta" },
+    });
+    expect(pending.ok()).toBe(true);
+    const approval = (await pending.json()).data;
+    await page.goto("/admin/jornada");
+    await page
+      .getByRole("combobox", { name: "Elección activa" })
+      .selectOption(election.id);
+    await expect(
+      page.getByText(
+        "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar el cierre. El cierre es definitivo.",
+      ),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Aprobar cierre", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirmar acción", exact: true })
+      .click();
+    await expect(
+      page.getByText("La acción fue registrada correctamente."),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Conciliar elección", exact: true }),
+    ).toBeEnabled();
+    const result = await client.query(
+      'SELECT state, "requesterId", "approverId" FROM approvals WHERE id=$1',
+      [approval.id],
+    );
+    expect(result.rows[0].state).toBe("APPROVED");
+    expect(result.rows[0].requesterId).toBe(me.id);
+    expect(result.rows[0].approverId).toBe(me.id);
+    expect((await page.request.get(root + "/results")).status()).toBe(403);
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Aprobar cierre", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Conciliar elección", exact: true }),
+    ).toBeEnabled();
+  } finally {
+    await client.end();
+  }
+});

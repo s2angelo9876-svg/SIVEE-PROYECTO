@@ -29,7 +29,7 @@ Duración sugerida: 8–12 minutos. Usa exclusivamente las cuentas ficticias. Ma
 | 12   | Solicitar y aprobar publicación                 | Ahora aparecen resultados autorizados, PDF y CSV.                 |
 | 13   | Mostrar auditoría                               | Acciones del comité y exportaciones, sin unir identidad y voto.   |
 
-En DEMO una cuenta del comité puede solicitar y aprobar; en modo oficial la API exige otra autoridad. El técnico no recibe resultados solo por administrar cuentas.
+En DEMO una cuenta del comité puede solicitar y aprobar. Temporalmente, también puede solicitar y aprobar el cierre global oficial; la publicación oficial sigue exigiendo otra autoridad. El técnico no recibe resultados solo por administrar cuentas.
 
 ## Demostración con cincuenta participantes
 
@@ -43,4 +43,4 @@ Con API iniciada, ejecuta `npm run demo:scenario`. Crea una nueva simulación y 
 - **¿Qué pasa si se pierde la respuesta?** La consulta de participación reconoce un commit previo; un reintento no agrega otra papeleta.
 - **¿Ya sirve para una elección oficial?** La simulación técnica funciona; el uso oficial necesita aprobación institucional y pruebas de infraestructura, privacidad y operación.
 
-El personal ingresa solo con correo y contraseña; no hay configuración de autenticador. El cierre global y la publicación requieren aprobación de otra cuenta autorizada.
+El personal ingresa solo con correo y contraseña; no hay configuración de autenticador. El cierre global permite temporalmente solicitar y aprobar con la misma cuenta autorizada; la publicación oficial requiere otra cuenta. Véase [Cierre temporal](CIERRE_TEMPORAL_UNA_CUENTA.md).

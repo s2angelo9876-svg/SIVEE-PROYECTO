@@ -478,7 +478,7 @@ try {
   await post("/windows/MANANA/close", { reason: "Fin del primer turno" });
   await post("/windows/TARDE/open", { reason: "Inicio del segundo turno" });
   await post("/windows/TARDE/close", { reason: "Fin del segundo turno" });
-  // Exercise the official two-person rule with password-only accounts.
+  // Single-account closure is temporary; official publication still needs two accounts.
   const second = await request(
     "/admin/accounts",
     "POST",
@@ -500,8 +500,72 @@ try {
     reason: "Finalización de la prueba",
   });
   await check(
-    "Cierre oficial exige dos cuentas distintas sin autenticador",
+    "Cierre oficial temporal permite aprobar la propia solicitud y conserva permisos y auditoría",
     async () => {
+      for (const unauthorized of [observer, tech]) {
+        assert.equal(
+          (
+            await request(
+              route + "/close-request",
+              "POST",
+              { reason: "Intento sin permiso de cierre" },
+              unauthorized,
+            )
+          ).status,
+          403,
+        );
+        assert.equal(
+          (
+            await request(
+              route + "/close-approve",
+              "POST",
+              { approvalId: close.id },
+              unauthorized,
+            )
+          ).status,
+          403,
+        );
+      }
+      assert.equal(
+        (
+          await request(
+            route + "/close-approve",
+            "POST",
+            { approvalId: crypto.randomUUID() },
+            committee,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (await db.election.findUniqueOrThrow({ where: { id } })).state,
+        "PAUSADA",
+      );
+      await post("/close-approve", { approvalId: close.id });
+      const approved = await db.approval.findUniqueOrThrow({
+        where: { id: close.id },
+      });
+      assert.equal(approved.state, "APPROVED");
+      assert.equal(approved.requesterId, approved.approverId);
+      const events = await db.audit.findMany({
+        where: {
+          electionId: id,
+          action: { in: ["CLOSE_REQUESTED", "CLOSE_APPROVED"] },
+        },
+      });
+      assert.equal(events.length, 2);
+      assert.ok(
+        events.every(
+          (event: any) =>
+            event.adminId === approved.requesterId &&
+            event.detail.distinctAccountRequired === false,
+        ),
+      );
+      const audit = events.find(
+        (event: any) => event.action === "CLOSE_APPROVED",
+      );
+      assert.equal(audit.detail.approvalId, close.id);
+      assert.equal(audit.detail.sameAccountApproval, true);
       assert.equal(
         (
           await request(
@@ -513,7 +577,12 @@ try {
         ).status,
         409,
       );
-      await post("/close-approve", { approvalId: close.id }, approver);
+      assert.equal(
+        await db.audit.count({
+          where: { electionId: id, action: "CLOSE_APPROVED" },
+        }),
+        1,
+      );
     },
   );
   await check("Cerrada aún no expone preferencias", async () =>
@@ -564,7 +633,15 @@ try {
         where: { electionId: id, state: "APPROVED" },
       });
       assert.equal(records.length, 2);
-      assert.ok(records.every((a: any) => a.requesterId !== a.approverId));
+      const publication = records.find((a: any) => a.type === "publish");
+      const closure = records.find((a: any) => a.type === "close");
+      assert.notEqual(publication.requesterId, publication.approverId);
+      assert.equal(closure.requesterId, closure.approverId);
+      const audit = await db.audit.findFirstOrThrow({
+        where: { electionId: id, action: "PUBLISH_APPROVED" },
+      });
+      assert.equal(audit.detail.distinctAccountRequired, true);
+      assert.equal(audit.detail.sameAccountApproval, false);
     },
   );
   await check(

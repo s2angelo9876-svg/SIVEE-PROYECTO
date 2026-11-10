@@ -5,7 +5,7 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 ## Conservar y terminar el ensayo
 
 1. Identifica la elección usada para las pruebas. Conserva un respaldo de PostgreSQL desde Railway antes de preparar la jornada real.
-2. Si sigue abierta, cierra sus turnos cuando ya no haya votantes de prueba. Solicita y aprueba el cierre global con dos cuentas distintas autorizadas de comité.
+2. Si sigue abierta, cierra sus turnos cuando ya no haya votantes de prueba. Solicita y aprueba el cierre global con tu misma cuenta autorizada de comité; esta excepción es temporal. Si ya hay una solicitud pendiente, pulsa **Aprobar cierre** desde esa cuenta. Véase [Cierre temporal](CIERRE_TEMPORAL_UNA_CUENTA.md).
 3. Conserva el ensayo y su auditoría en el historial. El cierre es definitivo; no se trata de reabrir esa misma elección ni de borrar sus papeletas. La opción de reiniciar una simulación solo existe en DEMO.
 
 ## Crear el proceso real desde el panel
@@ -25,6 +25,6 @@ La elección del viernes 13 de noviembre de 2026 debe tener su propio registro, 
 - Realiza las prácticas y la capacitación en el ensayo; no emitas votos de prueba en el proceso definitivo.
 - Cuando todo esté revisado, pulsa **Preparar elección**. Déjala preparada y sus turnos programados hasta que corresponda iniciar la votación.
 - La página pública muestra la elección creada más recientemente que no esté anulada. Después de crear el proceso definitivo, no crees otro ensayo en esta misma instalación: cambiaría la elección que ven los estudiantes.
-- El viernes, el comité abre manualmente el turno en **Jornada electoral**. Al finalizar ambos turnos: cierre global con otra autoridad, conciliación y publicación autorizada; luego descarga del acta.
+- El viernes, el comité abre manualmente el turno en **Jornada electoral**. Al finalizar ambos turnos: cierre global temporalmente con una cuenta autorizada, conciliación y publicación aprobada por otra cuenta; luego descarga del acta.
 
 Este procedimiento se realiza desde el panel. No requiere volver a ejecutar el inicializador de producción ni cambiar las claves del despliegue. Los logos ampliados se aplican a las imágenes ya guardadas al desplegar la nueva versión; no es necesario volver a subirlos en el ensayo.

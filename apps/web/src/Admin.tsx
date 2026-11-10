@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { readListLogo } from "./list-logo";
+import { requiresDistinctApprover } from "../../../packages/shared/approval-policy";
 import {
   LayoutDashboard,
   Leaf,
@@ -776,13 +777,16 @@ export function ElectionDay() {
             {
               n: 1,
               title: "Cierre global",
-              desc: "Termina de forma definitiva la emisión de votos.",
+              desc: requiresDistinctApprover(election.mode, "close")
+                ? "Termina de forma definitiva la emisión de votos. Requiere la aprobación de otra cuenta autorizada."
+                : "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar el cierre. El cierre es definitivo.",
               done: ["CERRADA", "CONCILIADA", "PUBLICADA"].includes(
                 election.state,
               ),
               action: pending("close") ? (
                 <button
                   className="button"
+                  disabled={!can("elections:approve")}
                   onClick={() =>
                     request("close-approve", "Aprobar cierre global", {
                       approvalId: pending("close").id,
@@ -795,9 +799,11 @@ export function ElectionDay() {
                 <button
                   className="button secondary"
                   disabled={
+                    !can("elections:close") ||
                     !election.windows.every(
                       (w: any) => w.state === "CERRADA",
-                    ) || !["PAUSADA", "EN_CURSO"].includes(election.state)
+                    ) ||
+                    !["PAUSADA", "EN_CURSO"].includes(election.state)
                   }
                   onClick={() =>
                     request("close-request", "Solicitar cierre global")
@@ -827,7 +833,9 @@ export function ElectionDay() {
             {
               n: 3,
               title: "Publicación autorizada",
-              desc: "Habilita los resultados y el acta a personal autorizado.",
+              desc: requiresDistinctApprover(election.mode, "publish")
+                ? "Habilita los resultados y el acta a personal autorizado. Requiere la aprobación de otra cuenta autorizada."
+                : "Habilita los resultados y el acta a personal autorizado.",
               done: election.state === "PUBLICADA",
               action: pending("publish") ? (
                 <button
@@ -1914,8 +1922,11 @@ export function Security() {
           contacta al responsable técnico para verificar tu identidad.
         </p>
         <p>
-          El cierre global y la publicación de resultados requieren la
-          aprobación de otra cuenta autorizada.
+          {requiresDistinctApprover("OFICIAL", "close")
+            ? "El cierre global requiere la aprobación de otra cuenta autorizada."
+            : "Temporalmente, una misma cuenta autorizada puede solicitar y aprobar el cierre global."}{" "}
+          La publicación de resultados oficiales requiere la aprobación de otra
+          cuenta autorizada.
         </p>
       </section>
     </>
