@@ -895,6 +895,10 @@ export function ElectionDay() {
         <Modal
           title={action.title}
           onClose={() => !busy && setAction(undefined)}
+          busy={busy}
+          confirmLabel="Confirmar acción"
+          confirmDisabled={!action.body && reason.trim().length < 5}
+          onConfirm={() => void execute()}
         >
           <p>
             Esta acción quedará registrada en la auditoría. El cierre de un
@@ -910,22 +914,7 @@ export function ElectionDay() {
               />
             </Field>
           )}
-          <div className="button-row">
-            <button
-              className="button secondary"
-              disabled={busy}
-              onClick={() => setAction(undefined)}
-            >
-              Cancelar
-            </button>
-            <button
-              className="button"
-              disabled={busy || (!action.body && reason.trim().length < 5)}
-              onClick={() => void execute()}
-            >
-              {busy ? "Procesando…" : "Confirmar acción"}
-            </button>
-          </div>
+
           {error && <Notice>{error}</Notice>}
         </Modal>
       )}
@@ -1013,9 +1002,14 @@ export function Lists() {
       {form && (
         <Modal
           title={form.id ? "Editar lista" : "Nueva lista"}
+          formId="electoral-list-form"
+          confirmLabel="Guardar lista"
+          busy={busy}
+          wide
           onClose={() => !busy && setForm(undefined)}
         >
           <form
+            id="electoral-list-form"
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
@@ -1177,9 +1171,6 @@ export function Lists() {
               Lista activa y aprobada para la elección
             </label>
             {error && <Notice>{error}</Notice>}
-            <button className="button full" disabled={busy}>
-              Guardar lista
-            </button>
           </form>
         </Modal>
       )}
@@ -1550,13 +1541,18 @@ export function Settings() {
               </div>
             )}
             {editable && (
-              <button className="button" disabled={!form.shifts.length || busy}>
-                {busy
-                  ? "Guardando…"
-                  : newElection
-                    ? "Crear elección"
-                    : "Guardar configuración"}
-              </button>
+              <div className="form-actions">
+                <button
+                  className="button"
+                  disabled={!form.shifts.length || busy}
+                >
+                  {busy
+                    ? "Guardando…"
+                    : newElection
+                      ? "Crear elección"
+                      : "Guardar configuración"}
+                </button>
+              </div>
             )}
           </fieldset>
         </form>
@@ -1635,6 +1631,31 @@ export function Settings() {
             modal === "reset" ? "Crear otra simulación" : "Preparar elección"
           }
           onClose={() => setModal("")}
+          busy={busy}
+          confirmLabel="Confirmar"
+          confirmDisabled={
+            modal === "reset" && confirmation !== "NUEVA SIMULACION"
+          }
+          onConfirm={() =>
+            void run(async () => {
+              if (modal === "prepare")
+                await api(`/admin/elections/${id}/prepare`, {
+                  method: "POST",
+                  body: {},
+                });
+              else {
+                const r = await api(`/admin/demo/${id}/reset`, {
+                  method: "POST",
+                  body: { confirmation },
+                });
+                await refresh();
+                setId(r.id);
+              }
+              setModal("");
+              setConfirmation("");
+              setSuccess("Operación completada y registrada.");
+            })
+          }
         >
           <p>
             {modal === "reset"
@@ -1649,34 +1670,7 @@ export function Settings() {
               />
             </Field>
           )}
-          <button
-            className="button"
-            disabled={
-              busy || (modal === "reset" && confirmation !== "NUEVA SIMULACION")
-            }
-            onClick={() =>
-              void run(async () => {
-                if (modal === "prepare")
-                  await api(`/admin/elections/${id}/prepare`, {
-                    method: "POST",
-                    body: {},
-                  });
-                else {
-                  const r = await api(`/admin/demo/${id}/reset`, {
-                    method: "POST",
-                    body: { confirmation },
-                  });
-                  await refresh();
-                  setId(r.id);
-                }
-                setModal("");
-                setConfirmation("");
-                setSuccess("Operación completada y registrada.");
-              })
-            }
-          >
-            {busy ? "Procesando…" : "Confirmar"}
-          </button>
+
           {error && <Notice>{error}</Notice>}
         </Modal>
       )}
@@ -1862,8 +1856,15 @@ export function Incidents() {
         )}
       </section>
       {form && (
-        <Modal title="Registrar incidencia" onClose={() => setForm(undefined)}>
+        <Modal
+          title="Registrar incidencia"
+          formId="incident-form"
+          confirmLabel="Registrar incidencia"
+          busy={busy}
+          onClose={() => setForm(undefined)}
+        >
           <form
+            id="incident-form"
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
@@ -1931,9 +1932,6 @@ export function Incidents() {
               />
             </Field>
             {error && <Notice>{error}</Notice>}
-            <button className="button full" disabled={busy}>
-              Registrar incidencia
-            </button>
           </form>
         </Modal>
       )}
@@ -1971,6 +1969,7 @@ export function Accounts() {
   const [rows, setRows] = useState<any[]>([]);
   const [form, setForm] = useState<any>();
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const load = () => api("/admin/accounts").then(setRows);
   useEffect(() => {
     void load().catch((e) => setError(e.message));
@@ -2043,17 +2042,26 @@ export function Accounts() {
       {form && (
         <Modal
           title="Crear cuenta del personal"
+          formId="staff-account-form"
+          confirmLabel="Crear cuenta"
+          busy={busy}
           onClose={() => setForm(undefined)}
         >
           <form
+            id="staff-account-form"
             onSubmit={async (e) => {
               e.preventDefault();
+              if (busy) return;
+              setBusy(true);
+              setError("");
               try {
                 await api("/admin/accounts", { method: "POST", body: form });
                 setForm(undefined);
                 await load();
               } catch (e: any) {
                 setError(e.message);
+              } finally {
+                setBusy(false);
               }
             }}
           >
@@ -2110,7 +2118,6 @@ export function Accounts() {
               </select>
             </Field>
             {error && <Notice>{error}</Notice>}
-            <button className="button full">Crear cuenta</button>
           </form>
         </Modal>
       )}
@@ -2245,7 +2252,11 @@ function InstitutionSchedule({
               </Field>
             </div>
             {!institution.identityLocked && (
-              <button className="button secondary">Guardar institución</button>
+              <div className="form-actions">
+                <button className="button secondary">
+                  Guardar institución
+                </button>
+              </div>
             )}
           </fieldset>
         </form>
@@ -2315,7 +2326,9 @@ function InstitutionSchedule({
               </div>
             </div>
           ))}
-          <button className="button secondary">Guardar horarios</button>
+          <div className="form-actions">
+            <button className="button secondary">Guardar horarios</button>
+          </div>
         </fieldset>
       </form>
     </section>

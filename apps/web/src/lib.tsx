@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -8,6 +8,7 @@ import {
   BookOpen,
   Star,
   ArrowUpRight,
+  X,
 } from "lucide-react";
 export const tokens = { admin: "", voter: "" };
 export function readBase64(file: File): Promise<string> {
@@ -204,28 +205,86 @@ export function Modal({
   title,
   children,
   onClose,
+  confirmLabel,
+  onConfirm,
+  formId,
+  busy = false,
+  busyLabel = "Procesando…",
+  confirmDisabled = false,
+  wide = false,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  confirmLabel?: string;
+  onConfirm?: () => void;
+  formId?: string;
+  busy?: boolean;
+  busyLabel?: string;
+  confirmDisabled?: boolean;
+  wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
+    const previous = document.activeElement;
     d?.showModal();
-    return () => d?.close();
+    return () => {
+      d?.close();
+      if (previous instanceof HTMLElement && previous.isConnected)
+        previous.focus({ preventScroll: true });
+    };
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} className="modal">
-      <button
-        className="modal-close"
-        aria-label="Cerrar diálogo"
-        onClick={onClose}
-      >
-        ×
-      </button>
-      <h2>{title}</h2>
-      {children}
+    <dialog
+      ref={ref}
+      className={"modal" + (wide ? " modal-wide" : "")}
+      aria-labelledby={titleId}
+      aria-busy={busy}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!busy) onClose();
+      }}
+    >
+      <header className="modal-header">
+        <h2 id={titleId}>{title}</h2>
+        <button
+          type="button"
+          className="modal-close"
+          aria-label="Cerrar diálogo"
+          disabled={busy}
+          onClick={onClose}
+        >
+          <X size={20} strokeWidth={1.5} aria-hidden="true" />
+        </button>
+      </header>
+      <div className="modal-body">
+        <fieldset className="modal-fields" disabled={busy}>
+          {children}
+        </fieldset>
+      </div>
+      {confirmLabel && (
+        <footer className="modal-actions">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={busy}
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+          <button
+            type={formId ? "submit" : "button"}
+            form={formId}
+            className="button"
+            disabled={busy || confirmDisabled}
+            onClick={onConfirm}
+          >
+            {busy ? busyLabel : confirmLabel}
+          </button>
+        </footer>
+      )}
     </dialog>
   );
 }

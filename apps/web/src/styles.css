@@ -288,7 +288,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 15px;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 24px;
 }
 .panel-heading h2 {
@@ -348,35 +349,151 @@ button {
 .two-columns > .panel {
   min-width: 0;
 }
+:root:has(.modal[open]) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
 .modal {
-  border: 1px solid #dcdfe6;
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 32px;
-  width: 520px;
-  max-width: calc(100% - 24px);
-  max-height: 90vh;
-  color: #283142;
+  padding: 0;
+  width: 600px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  color: #172a43;
   background: #fff;
-  box-shadow: 0 20px 90px #172f3a40;
+  box-shadow: 0 12px 40px #00000024;
+}
+.modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+.modal-wide {
+  width: 760px;
 }
 .modal::backdrop {
-  background: #0d252b65;
-  backdrop-filter: blur(3px);
+  background: #0b1f3a70;
 }
-.modal > h2 {
-  padding-right: 24px;
-  margin-bottom: 18px;
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
 }
-.modal > p {
-  margin: 12px 0 24px;
+.modal-header h2 {
+  align-self: center;
+  min-width: 0;
+  font-size: 20px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 .modal-close {
-  position: absolute;
-  right: 15px;
-  top: 14px;
-  font-size: 27px;
-  min-width: 40px;
-  min-height: 40px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+}
+.modal-close:hover:not(:disabled) {
+  background: #f5f7fb;
+}
+.modal-body {
+  min-height: 0;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px;
+  scrollbar-gutter: stable;
+}
+.modal-fields,
+.modal-fields form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.modal-fields .field {
+  margin: 0;
+  min-width: 0;
+  font-size: 14px;
+}
+.modal-fields p {
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.modal-fields input:not([type="checkbox"]):not([type="radio"]),
+.modal-fields select,
+.modal-fields textarea {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 8px;
+  min-height: 48px;
+}
+.modal .two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.modal-actions,
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.modal-actions {
+  flex-shrink: 0;
+  padding: 20px 24px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+.modal-actions > .button {
+  min-height: 48px;
+  max-width: 100%;
+  border-radius: 8px;
+  text-align: center;
+}
+.form-actions {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  margin-top: 24px;
+}
+.settings-panel .panel-heading {
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.panel-heading > div {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.preparation-panel,
+.reset-panel {
+  flex-wrap: wrap;
+}
+.preparation-panel > div,
+.reset-panel > div {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.preparation-panel > .button,
+.reset-panel > .button,
+.panel-heading > .button {
+  flex-shrink: 0;
+  max-width: 100%;
 }
 .check-label {
   display: flex;
@@ -2061,7 +2178,7 @@ td small {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 35px;
+  gap: 24px;
 }
 .preparation-panel h2,
 .reset-panel h2 {
@@ -3164,13 +3281,33 @@ td small {
     font-size: 9px;
   }
   .modal {
-    padding: 28px 22px;
+    max-width: calc(100% - 24px);
+    max-height: calc(100dvh - 24px);
+    border-radius: 12px;
+  }
+  .modal-header,
+  .modal-body {
+    padding: 16px;
+  }
+  .modal-actions {
+    padding: 16px;
+    flex-wrap: nowrap;
+  }
+  .modal-actions > .button {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 12px;
   }
   .modal .two-columns {
-    display: block;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .modal > h2 {
-    font-size: 22px;
+  .modal-fields input:not([type="checkbox"]):not([type="radio"]),
+  .modal-fields textarea,
+  .modal-fields select {
+    font-size: 16px;
+  }
+  .form-actions > .button {
+    width: 100%;
   }
   .audit-timeline article > div:nth-child(2) {
     min-width: 170px;

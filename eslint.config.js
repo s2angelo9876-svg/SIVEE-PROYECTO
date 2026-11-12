@@ -3,6 +3,7 @@ import ts from "typescript-eslint";
 export default ts.config(
   {
     ignores: [
+      ".agents/**",
       "dist/**",
       "apps/web/dist/**",
       "node_modules/**",

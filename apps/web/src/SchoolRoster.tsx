@@ -550,9 +550,14 @@ function SchoolRosterScreen() {
       {form && (
         <Modal
           title={form.id ? "Corregir datos" : "Registrar estudiante"}
+          formId="school-student-form"
+          confirmLabel="Guardar registro"
+          busy={busy}
+          wide
           onClose={() => !busy && setForm(undefined)}
         >
           <form
+            id="school-student-form"
             onSubmit={(e) => {
               e.preventDefault();
               void run(async () => {
@@ -647,9 +652,7 @@ function SchoolRosterScreen() {
                 </Field>
               </>
             )}
-            <button className="button" disabled={busy}>
-              {busy ? "Guardando…" : "Guardar registro"}
-            </button>
+
             {error && <Notice>{error}</Notice>}
           </form>
         </Modal>

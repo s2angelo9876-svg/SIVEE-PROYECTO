@@ -926,6 +926,25 @@ function RosterScreen({ id, election, can }: any) {
       {reissue && (
         <Modal
           title="Reemitir códigos de acceso"
+          busy={busy}
+          busyLabel="Generando…"
+          confirmLabel="Confirmar reemisión"
+          confirmDisabled={!confirmed || reason.trim().length < 10}
+          onConfirm={() =>
+            void run(async () => {
+              const { label: _label, ...target } = reissue;
+              setIssued(undefined);
+              const result = await api(path + "/reissue", {
+                method: "POST",
+                body: { ...target, reason },
+              });
+              setIssued(result);
+              setReissue(undefined);
+              setSearched(false);
+              setMessage("Códigos reemplazados. Descarga la nueva entrega.");
+              await load();
+            })
+          }
           onClose={() => {
             if (!busy) setReissue(undefined);
           }}
@@ -956,27 +975,7 @@ function RosterScreen({ id, election, can }: any) {
             He verificado a los titulares y entiendo que los códigos anteriores
             dejarán de funcionar.
           </label>
-          <button
-            className="button full"
-            disabled={busy || !confirmed || reason.trim().length < 10}
-            onClick={() =>
-              void run(async () => {
-                const { label: _label, ...target } = reissue;
-                setIssued(undefined);
-                const result = await api(path + "/reissue", {
-                  method: "POST",
-                  body: { ...target, reason },
-                });
-                setIssued(result);
-                setReissue(undefined);
-                setSearched(false);
-                setMessage("Códigos reemplazados. Descarga la nueva entrega.");
-                await load();
-              })
-            }
-          >
-            {busy ? "Generando…" : "Confirmar reemisión"}
-          </button>
+
           {error && <Notice>{error}</Notice>}
         </Modal>
       )}

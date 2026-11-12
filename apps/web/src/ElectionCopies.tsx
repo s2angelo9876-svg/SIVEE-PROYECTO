@@ -152,9 +152,14 @@ export function ElectionCopies({
       {save && (
         <Modal
           title="Guardar copia de configuración"
+          formId="save-election-copy-form"
+          confirmLabel="Confirmar copia"
+          busy={busy}
+          confirmDisabled={save.label.trim().length < 3}
           onClose={() => !busy && setSave(undefined)}
         >
           <form
+            id="save-election-copy-form"
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
@@ -179,21 +184,23 @@ export function ElectionCopies({
               forman parte de esta copia.
             </p>
             {error && <Notice>{error}</Notice>}
-            <button
-              className="button"
-              disabled={busy || save.label.trim().length < 3}
-            >
-              {busy ? "Guardando…" : "Confirmar copia"}
-            </button>
           </form>
         </Modal>
       )}
       {recover && (
         <Modal
           title="Recuperar como nueva elección"
+          formId="recover-election-copy-form"
+          confirmLabel="Confirmar recuperación"
+          busy={busy}
+          confirmDisabled={
+            confirmation !== "CREAR NUEVA ELECCION" ||
+            recover.name.trim().length < 5
+          }
           onClose={() => !busy && setRecover(undefined)}
         >
           <form
+            id="recover-election-copy-form"
             onSubmit={(event) => {
               event.preventDefault();
               void run(async () => {
@@ -248,16 +255,6 @@ export function ElectionCopies({
               />
             </Field>
             {error && <Notice>{error}</Notice>}
-            <button
-              className="button"
-              disabled={
-                busy ||
-                confirmation !== "CREAR NUEVA ELECCION" ||
-                recover.name.trim().length < 5
-              }
-            >
-              {busy ? "Recuperando…" : "Confirmar recuperación"}
-            </button>
           </form>
         </Modal>
       )}
