@@ -165,3 +165,7 @@ Al crear una elección después del ensayo, el colegio compartido se reutiliza. 
 Validación de la corrección de identidad institucional: build, TypeScript y ESLint; 10 comprobaciones de integración, incluidas solicitudes idénticas concurrentes y todos los estados protegidos; dos pruebas de navegador (creación tras ensayo publicado con guardado de configuración/horarios y recuperación de copias). Se mantuvieron los votos y la auditoría del ensayo sintético. No se modificó ninguna institución de producción desde este entorno.
 
 El pulido de formularios centra los diálogos, mantiene sus acciones visibles y conserva la validación de formularios con controles de doble envío. Validación: build/TypeScript, ESLint, 53 pruebas unitarias y 13 de navegador, usando bases temporales y datos sintéticos. No requiere migraciones ni variables nuevas. La skill de desarrollo unslop está instalada en `.agents/skills/unslop` y queda excluida de la imagen de la aplicación; véase [Formularios y confirmaciones](FORMULARIOS_UI_UX.md).
+
+## Observador de solo lectura
+
+El observador solo accede a Vista general y a Resultados y actas; este último apartado se habilita al cerrar todos los turnos y muestra cifras/descargas después de la publicación autorizada. El cambio alcanza cuentas existentes sin migrar ni modificar datos. Requiere desplegar la nueva versión en Railway. Véase [Acceso del observador](OBSERVADOR.md).

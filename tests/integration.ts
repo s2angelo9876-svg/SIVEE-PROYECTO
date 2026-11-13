@@ -75,6 +75,11 @@ try {
     return { cookie: r.cookie, csrf: r.data.data.csrfToken };
   }
   const committee = await login("comite@sivee.demo");
+  // Simulate a pre-change observer: no stored reports permission and an existing account.
+  await db.grant.updateMany({
+    where: { role: "OBSERVADOR" },
+    data: { permissions: ["elections:read", "turnout:read", "results:read"] },
+  });
   const observer = await login("observador@sivee.demo");
   const tech = await login("tecnico@sivee.demo");
   const elections = await request(
@@ -141,24 +146,125 @@ try {
       403,
     );
   });
-  await check("Observador no puede abrir ni exportar", async () => {
-    assert.equal(
-      (
-        await request(
-          route + "/windows/MANANA/open",
-          "POST",
-          { reason: "Prueba de permiso" },
-          observer,
-        )
-      ).status,
-      403,
-    );
-    assert.equal(
-      (await request(route + "/reports/final.pdf", "GET", undefined, observer))
-        .status,
-      403,
-    );
-  });
+  await check(
+    "Observador no puede abrir ni exportar antes de publicar",
+    async () => {
+      assert.equal(
+        (
+          await request(
+            route + "/windows/MANANA/open",
+            "POST",
+            { reason: "Prueba de permiso" },
+            observer,
+          )
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await request(
+            route + "/reports/final.pdf",
+            "GET",
+            undefined,
+            observer,
+          )
+        ).status,
+        403,
+      );
+    },
+  );
+  const newObserverAccount = await request(
+    "/admin/accounts",
+    "POST",
+    {
+      name: "Observador Sintético",
+      email: "nuevo.observador@sivee.demo",
+      password: "DemoSivee2026!",
+      role: "OBSERVADOR",
+      electionScope: id,
+    },
+    tech,
+  );
+  assert.equal(newObserverAccount.status, 200);
+  const newObserver = await login("nuevo.observador@sivee.demo");
+  await check(
+    "Observadores nuevos e históricos solo consultan vista general y resultados publicados",
+    async () => {
+      const before = await db.election.findUniqueOrThrow({ where: { id } });
+      for (const s of [observer, newObserver]) {
+        assert.equal(
+          (await request(route + "/turnout", "GET", undefined, s)).status,
+          200,
+        );
+        for (const path of [
+          "/admin/accounts",
+          "/admin/institution",
+          route + "/roster/summary",
+          route + "/roster/school",
+          route + "/lists",
+          route + "/incidents",
+          route + "/audit",
+          route + "/copies",
+        ])
+          assert.equal(
+            (await request(path, "GET", undefined, s)).status,
+            403,
+            path,
+          );
+        const mutations: [string, string][] = [
+          ["POST", "/admin/elections"],
+          ["PATCH", "/admin/institution"],
+          ["POST", "/admin/accounts"],
+          ["PATCH", route],
+          ["POST", route + "/prepare"],
+          ["POST", route + "/windows/TARDE/close"],
+          ["POST", route + "/close-request"],
+          ["POST", route + "/close-approve"],
+          ["POST", route + "/reconcile"],
+          ["POST", route + "/publish-request"],
+          ["POST", route + "/publish-approve"],
+          ["POST", route + "/lists"],
+          ["POST", route + "/incidents"],
+          ["POST", route + "/copies"],
+          ["POST", route + "/roster/import-preview"],
+        ];
+        for (const [method, path] of mutations)
+          assert.equal((await request(path, method, {}, s)).status, 403, path);
+      }
+      assert.deepEqual(
+        await db.election.findUniqueOrThrow({ where: { id } }),
+        before,
+      );
+      const other = await db.election.create({
+        data: {
+          institutionId: e.institutionId,
+          name: "Otra elección sintética",
+          state: "ANULADA",
+        },
+      });
+      assert.equal(
+        (
+          await request(
+            `/admin/elections/${other.id}/turnout`,
+            "GET",
+            undefined,
+            newObserver,
+          )
+        ).status,
+        403,
+      );
+      const visible = await request(
+        "/admin/elections",
+        "GET",
+        undefined,
+        newObserver,
+      );
+      assert.deepEqual(
+        visible.data.data.map((x: any) => x.id),
+        [id],
+      );
+    },
+  );
   await check("DNI solo y error de código no revelan identidad", async () => {
     const bad = await request("/voter/sessions", "POST", {
       electionId: id,
@@ -478,6 +584,21 @@ try {
   await post("/windows/MANANA/close", { reason: "Fin del primer turno" });
   await post("/windows/TARDE/open", { reason: "Inicio del segundo turno" });
   await post("/windows/TARDE/close", { reason: "Fin del segundo turno" });
+  await check(
+    "Cerrar ambos turnos todavía no revela resultados ni actas al observador",
+    async () => {
+      for (const suffix of [
+        "/results",
+        "/reports/final.pdf",
+        "/reports/final.csv",
+      ])
+        for (const s of [observer, newObserver])
+          assert.equal(
+            (await request(route + suffix, "GET", undefined, s)).status,
+            403,
+          );
+    },
+  );
   // The temporary exception covers closure and publication with password-only accounts.
   const second = await request(
     "/admin/accounts",
@@ -618,11 +739,20 @@ try {
     );
   });
   await post("/reconcile");
-  await check("Conciliada sigue reservada", async () =>
-    assert.equal(
-      (await request(route + "/results", "GET", undefined, committee)).status,
-      403,
-    ),
+  await check(
+    "Conciliada sigue reservada para comité y observadores",
+    async () => {
+      for (const s of [committee, observer, newObserver])
+        for (const suffix of [
+          "/results",
+          "/reports/final.pdf",
+          "/reports/final.csv",
+        ])
+          assert.equal(
+            (await request(route + suffix, "GET", undefined, s)).status,
+            403,
+          );
+    },
   );
   const publish = await post("/publish-request", {
     reason: "Publicación de resultados conciliados",
@@ -759,7 +889,7 @@ try {
     },
   );
   await check(
-    "Acta PDF y CSV válidos; exportación de observador denegada",
+    "Comité y observadores nuevos e históricos consultan resultados, acta PDF y CSV publicados con auditoría",
     async () => {
       const pdf = await request(
         route + "/reports/final.pdf",
@@ -777,17 +907,38 @@ try {
       );
       assert.equal(csv.status, 200);
       assert.match(csv.data.toString(), /Blancos/);
-      assert.equal(
-        (
-          await request(
-            route + "/reports/final.pdf",
-            "GET",
-            undefined,
-            observer,
-          )
-        ).status,
-        403,
-      );
+      for (const s of [observer, newObserver]) {
+        const result = await request(route + "/results", "GET", undefined, s);
+        assert.equal(result.status, 200);
+        assert.deepEqual(
+          result.data.data.summary,
+          (await request(route + "/results", "GET", undefined, committee)).data
+            .data.summary,
+        );
+        const observerPdf = await request(
+          route + "/reports/final.pdf",
+          "GET",
+          undefined,
+          s,
+        );
+        assert.equal(observerPdf.status, 200);
+        assert.equal(observerPdf.data.subarray(0, 4).toString(), "%PDF");
+        const observerCsv = await request(
+          route + "/reports/final.csv",
+          "GET",
+          undefined,
+          s,
+        );
+        assert.equal(observerCsv.status, 200);
+        assert.deepEqual(observerCsv.data, csv.data);
+      }
+      const events = await db.audit.findMany({
+        where: {
+          adminId: newObserverAccount.data.data.id,
+          action: { in: ["REPORT_PDF_EXPORTED", "REPORT_CSV_EXPORTED"] },
+        },
+      });
+      assert.equal(events.length, 2);
     },
   );
   await check("Cierre irreversible y reinicio prohibido en TEST", async () => {

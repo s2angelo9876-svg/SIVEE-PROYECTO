@@ -5,6 +5,7 @@ import { Landing, VoterFlow } from "./Public";
 import {
   AdminLogin,
   AdminShell,
+  AdminSection,
   Dashboard,
   ElectionDay,
   Lists,
@@ -59,19 +60,82 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<Dashboard />} />
-            <Route path="jornada" element={<ElectionDay />} />
-            <Route path="padron" element={<Roster />} />
+            <Route
+              path="jornada"
+              element={
+                <AdminSection permission="windows:manage">
+                  <ElectionDay />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="padron"
+              element={
+                <AdminSection permission="roster:read">
+                  <Roster />
+                </AdminSection>
+              }
+            />
             <Route
               path="mesa"
               element={<Navigate to="/admin/jornada" replace />}
             />
-            <Route path="listas" element={<Lists />} />
-            <Route path="resultados" element={<Results />} />
-            <Route path="configuracion" element={<Settings />} />
-            <Route path="auditoria" element={<AuditPage />} />
-            <Route path="incidencias" element={<Incidents />} />
-            <Route path="seguridad" element={<Security />} />
-            <Route path="cuentas" element={<Accounts />} />
+            <Route
+              path="listas"
+              element={
+                <AdminSection permission="lists:read">
+                  <Lists />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="resultados"
+              element={
+                <AdminSection permission="results:read" results>
+                  <Results />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="configuracion"
+              element={
+                <AdminSection permission="elections:write">
+                  <Settings />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="auditoria"
+              element={
+                <AdminSection permission="audit:read">
+                  <AuditPage />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="incidencias"
+              element={
+                <AdminSection permission="incidents:read">
+                  <Incidents />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="seguridad"
+              element={
+                <AdminSection>
+                  <Security />
+                </AdminSection>
+              }
+            />
+            <Route
+              path="cuentas"
+              element={
+                <AdminSection permission="accounts:manage">
+                  <Accounts />
+                </AdminSection>
+              }
+            />
           </Route>
           <Route
             path="*"

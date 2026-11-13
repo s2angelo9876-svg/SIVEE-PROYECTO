@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { readListLogo } from "./list-logo";
 import { ElectionCopies } from "./ElectionCopies";
@@ -55,10 +61,41 @@ import {
 } from "./lib";
 import { Brand } from "./Public";
 import { useSite } from "./Site";
-import { hasPermission } from "../../../packages/shared/domain";
+import { hasPermission, isObserverOnly } from "../../../packages/shared/domain";
 const AdminContext = createContext<any>(null);
 export function useAdmin() {
   return useContext(AdminContext);
+}
+export function AdminSection({
+  permission,
+  results = false,
+  children,
+}: {
+  permission?: string;
+  results?: boolean;
+  children: ReactNode;
+}) {
+  const { can, observer, resultsLocked } = useAdmin();
+  const forbidden = permission ? !can(permission) : observer;
+  if (!forbidden && !(results && resultsLocked)) return children;
+  return (
+    <section className="panel results-locked">
+      <div className="lock-medallion">
+        <LockKeyhole size={30} />
+      </div>
+      <h1>
+        {forbidden ? "Acceso restringido" : "Resultados y actas bloqueados"}
+      </h1>
+      <p>
+        {forbidden
+          ? "Tu cuenta no tiene permiso para consultar esta sección."
+          : "Este apartado estará disponible cuando todos los turnos de la elección estén cerrados. Las cifras y actas se mostrarán después de la conciliación y la publicación autorizada."}
+      </p>
+      <Link className="button secondary" to="/admin">
+        Volver a Vista general
+      </Link>
+    </section>
+  );
 }
 export function AdminLogin() {
   const site = useSite();
@@ -199,6 +236,13 @@ export function AdminShell() {
   }, []);
   const election = elections.find((e) => e.id === id);
   const can = (p: string) => user && hasPermission(user.grants, p, id);
+  const observer = !!user && isObserverOnly(user.grants, id || undefined);
+  const resultsLocked =
+    observer &&
+    !(
+      election?.windows.length > 0 &&
+      election.windows.every((w: any) => w.state === "CERRADA")
+    );
   const nav = [
     {
       to: "/admin",
@@ -271,7 +315,17 @@ export function AdminShell() {
   if (!user) return <Loading />;
   return (
     <AdminContext.Provider
-      value={{ user, elections, election, id, setId, refresh: load, can }}
+      value={{
+        user,
+        elections,
+        election,
+        id,
+        setId,
+        refresh: load,
+        can,
+        observer,
+        resultsLocked,
+      }}
     >
       <div className="admin-layout">
         <aside
@@ -295,18 +349,30 @@ export function AdminShell() {
           </div>
           <nav>
             {nav
-              .filter((n) => !n.p || can(n.p))
-              .map((n) => (
-                <NavLink
-                  key={n.to}
-                  to={n.to}
-                  end={n.to === "/admin"}
-                  onClick={() => setMobile(false)}
-                >
-                  <n.icon size={18} />
-                  {n.label}
-                </NavLink>
-              ))}
+              .filter((n) => (n.p ? can(n.p) : !observer))
+              .map((n) =>
+                resultsLocked && n.p === "results:read" ? (
+                  <span
+                    key={n.to}
+                    className="nav-locked"
+                    aria-disabled="true"
+                    title="Disponible cuando todos los turnos estén cerrados"
+                  >
+                    <LockKeyhole size={18} />
+                    {n.label}
+                  </span>
+                ) : (
+                  <NavLink
+                    key={n.to}
+                    to={n.to}
+                    end={n.to === "/admin"}
+                    onClick={() => setMobile(false)}
+                  >
+                    <n.icon size={18} />
+                    {n.label}
+                  </NavLink>
+                ),
+              )}
           </nav>
           <div className="sidebar-bottom">
             {site.mode === "DEMO" && (
@@ -389,6 +455,10 @@ export function Dashboard() {
   const [connection, setConnection] = useState("Conectando");
   const [time, setTime] = useState("");
   const [error, setError] = useState("");
+  const windowStates = election?.windows
+    .map((w: any) => `${w.shift}:${w.state}`)
+    .sort()
+    .join(",");
   useEffect(() => {
     if (!id || !can("turnout:read")) return;
     setP(undefined);
@@ -399,13 +469,20 @@ export function Dashboard() {
       onData(d) {
         setP(d);
         setTime(dateFormat(new Date()));
-        if (d.state && d.state !== election.state)
+        const currentWindows = d.windows
+          ?.map((w) => `${w.shift}:${w.state}`)
+          .sort()
+          .join(",");
+        if (
+          (d.state && d.state !== election.state) ||
+          (currentWindows !== undefined && currentWindows !== windowStates)
+        )
           void refresh().catch((e: any) => setError(e.message));
       },
       onConnection: setConnection,
       onError: setError,
     });
-  }, [id, election?.state]);
+  }, [id, election?.state, windowStates]);
   if (!can("turnout:read"))
     return (
       <PageTitle

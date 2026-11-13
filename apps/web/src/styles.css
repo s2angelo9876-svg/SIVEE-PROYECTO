@@ -1339,7 +1339,8 @@ button {
   flex-direction: column;
   gap: 5px;
 }
-.sidebar nav > a {
+.sidebar nav > a,
+.sidebar nav > .nav-locked {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1349,6 +1350,11 @@ button {
   font-size: 11px;
   border-radius: 7px;
   font-weight: 450;
+}
+.sidebar nav > .nav-locked {
+  color: #697386;
+  cursor: not-allowed;
+  background: #f2f4f8;
 }
 .sidebar nav > a svg {
   color: #525a69;

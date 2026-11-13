@@ -34,13 +34,15 @@ La sesión consumida solo permite reconocer participación/reintentos hasta el l
 - El personal ingresa con `{email, password}` en `POST /admin/auth/login`. Las rutas `/admin/mfa/setup` y `/admin/mfa/confirm` se retiraron (404).
 - `GET/POST /admin/accounts`; `PATCH /admin/accounts/:accountId` — `{active}`; solo ADMIN_TECNICO.
 
+El rol `OBSERVADOR` solo consulta la vista general y los resultados/actas publicados. Tiene `reports:read` también para cuentas existentes; nunca utiliza permisos de escritura almacenados dentro de un grant de observador. Las demás secciones del panel están bloqueadas y el servidor comprueba permisos en cada operación. El menú de resultados se habilita al cerrar todos los turnos; las API de resultados/PDF/CSV mantienen el embargo hasta `PUBLICADA`. Véase [Acceso del observador](OBSERVADOR.md). Los eventos de participación incluyen estados de turnos (`windows: [{shift,state}]`) para actualizar este bloqueo en vivo, sin preferencias.
+
 ## Integridad
 
 Orden de bloqueo: elección → ventana → participación. Emisión usa FOR SHARE, cierre FOR UPDATE; la actualización PENDIENTE → VOTO_EMITIDO y la inserción de papeleta pertenecen a la misma transacción. El rol API no puede actualizar, borrar ni truncar papeletas. No hay columnas de identidad ni timestamp exacto en la urna.
 
 Los endpoints de preferencias usan una guarda de PUBLICADA y verifican el hash del acta. Ningún desglose de preferencias por turno/grupo pequeño se exporta. Los permisos se comprueban en servidor por institución y alcance de elección.
 
-Configuración adicional: `GET /admin/institution` devuelve el colegio compartido y `identityLocked`, que indica si ya existen elecciones iniciadas o finalizadas. `PATCH /admin/institution` recibe `{name,code}`; un guardado sin cambios devuelve 200 y no añade `INSTITUTION_UPDATED`, incluso tras un ensayo publicado. Cambiar realmente nombre/código se rechaza con 409 si `identityLocked` es true; no es necesario volver a guardarlos para crear otra elección. Mantiene los permisos institucionales existentes. `PATCH /admin/elections/:id/windows/:shift` recibe `{startsAt,endsAt}` (ISO UTC o null) y requiere que esa elección esté en BORRADOR, independientemente del historial de otras elecciones.
+Configuración adicional: `GET /admin/institution` requiere `elections:write` y devuelve el colegio compartido y `identityLocked`, que indica si ya existen elecciones iniciadas o finalizadas. `PATCH /admin/institution` recibe `{name,code}`; un guardado sin cambios devuelve 200 y no añade `INSTITUTION_UPDATED`, incluso tras un ensayo publicado. Cambiar realmente nombre/código se rechaza con 409 si `identityLocked` es true; no es necesario volver a guardarlos para crear otra elección. Mantiene los permisos institucionales existentes. `PATCH /admin/elections/:id/windows/:shift` recibe `{startsAt,endsAt}` (ISO UTC o null) y requiere que esa elección esté en BORRADOR, independientemente del historial de otras elecciones.
 
 ## Padrón
 

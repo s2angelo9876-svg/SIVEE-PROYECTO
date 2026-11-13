@@ -6,6 +6,7 @@ type Turnout = {
   remaining: number;
   participationPct: number;
   state?: string;
+  windows?: { shift: string; state: string }[];
 };
 // Close native EventSource retries and use bounded backoff. Never replay a write.
 export function subscribeTurnout(options: {

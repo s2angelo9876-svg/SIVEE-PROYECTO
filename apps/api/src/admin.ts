@@ -162,7 +162,7 @@ async function institutionIdentityLocked(tx: Tx, institutionId: string) {
     })) > 0
   );
 }
-admin.get("/institution", permit("elections:read"), async (_req, res) => {
+admin.get("/institution", permit("elections:write"), async (_req, res) => {
   const institutionId = res.locals.admin.institutionId;
   const [institution, identityLocked] = await Promise.all([
     db.institution.findUniqueOrThrow({ where: { id: institutionId } }),
@@ -953,11 +953,12 @@ admin.get("/elections/:id/events", permit("turnout:read"), async (req, res) => {
       }
       const e = await db.election.findUniqueOrThrow({
         where: { id: String(req.params.id) },
+        include: { windows: { select: { shift: true, state: true } } },
       });
       const p = await turnout(db, e.id);
       const v = e.version * 1000000 + p.voted;
       res.write(
-        `id: ${v}\nevent: turnout.updated\ndata: ${JSON.stringify({ v, ...p, state: e.state })}\n\n`,
+        `id: ${v}\nevent: turnout.updated\ndata: ${JSON.stringify({ v, ...p, state: e.state, windows: e.windows })}\n\n`,
       );
     } catch {
       res.end();

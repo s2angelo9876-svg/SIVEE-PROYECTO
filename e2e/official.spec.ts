@@ -528,7 +528,7 @@ test("El personal accede sin autenticador y el enlace antiguo abre el panel", as
       await expect(page).toHaveURL(origin + "/admin");
       await page.goto("/admin/seguridad");
       await expect(
-        page.getByRole("heading", { name: "Acceso del personal" }),
+        page.getByRole("heading", { name: "Acceso restringido" }),
       ).toBeVisible();
       await expect(
         page.getByRole("button", { name: "Configurar autenticación" }),

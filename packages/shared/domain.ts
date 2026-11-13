@@ -140,18 +140,42 @@ export const rolePermissions: Record<string, string[]> = {
     "incidents:read",
     "incidents:write",
   ],
-  OBSERVADOR: ["elections:read", "turnout:read", "results:read"],
+  OBSERVADOR: [
+    "elections:read",
+    "turnout:read",
+    "results:read",
+    "reports:read",
+  ],
   MESA: ["elections:read", "turnout:read", "incidents:read", "incidents:write"],
   ADMIN_TECNICO: ["accounts:manage"],
 };
+type AccessGrant = {
+  role?: string;
+  electionScope: string;
+  permissions: string[];
+};
+export function isObserverOnly(grants: AccessGrant[], electionId?: string) {
+  const applicable = electionId
+    ? grants.filter(
+        (g) => g.electionScope === "*" || g.electionScope === electionId,
+      )
+    : grants;
+  return (
+    applicable.length > 0 && applicable.every((g) => g.role === "OBSERVADOR")
+  );
+}
 export function hasPermission(
-  grants: { electionScope: string; permissions: string[] }[],
+  grants: AccessGrant[],
   permission: string,
   electionId?: string,
 ) {
   return grants.some(
     (g) =>
-      g.permissions.includes(permission) &&
+      // Existing observer grants keep their scope but always use the read-only policy.
+      (g.role === "OBSERVADOR"
+        ? rolePermissions.OBSERVADOR
+        : g.permissions
+      ).includes(permission) &&
       (g.electionScope === "*" || g.electionScope === electionId),
   );
 }

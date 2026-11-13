@@ -9,6 +9,8 @@ import {
   electoralOutcome,
   assertReconciled,
   hasPermission,
+  isObserverOnly,
+  rolePermissions,
   rosterRowSchema,
 } from "../packages/shared/domain";
 import { windowAvailable, votingAvailable } from "../apps/api/src/services";
@@ -111,6 +113,38 @@ describe("conciliación y permisos", () => {
     expect(hasPermission(g, "results:read", "a")).toBe(false);
     expect(hasPermission(g, "turnout:read", "b")).toBe(false);
     expect(hasPermission(g, "turnout:read", "a")).toBe(true);
+  });
+  it("el observador histórico obtiene actas y nunca permisos de modificación", () => {
+    const grant = {
+      role: "OBSERVADOR",
+      electionScope: "a",
+      permissions: ["elections:read", "turnout:read", "results:read"],
+    };
+    expect(hasPermission([grant], "reports:read", "a")).toBe(true);
+    expect(hasPermission([grant], "reports:read", "b")).toBe(false);
+    const stale = {
+      ...grant,
+      permissions: [...rolePermissions.COMITE, "accounts:manage"],
+    };
+    for (const permission of stale.permissions.filter(
+      (p) => !rolePermissions.OBSERVADOR.includes(p),
+    ))
+      expect(hasPermission([stale], permission, "a")).toBe(false);
+  });
+  it("conserva otros roles y distingue el alcance del perfil observador", () => {
+    const grants = [
+      { role: "OBSERVADOR", electionScope: "*", permissions: [] },
+      {
+        role: "COMITE",
+        electionScope: "b",
+        permissions: rolePermissions.COMITE,
+      },
+    ];
+    expect(isObserverOnly(grants, "a")).toBe(true);
+    expect(isObserverOnly(grants, "b")).toBe(false);
+    expect(isObserverOnly([])).toBe(false);
+    expect(hasPermission(grants, "windows:manage", "a")).toBe(false);
+    expect(hasPermission(grants, "windows:manage", "b")).toBe(true);
   });
   it("hash canónico independiente del orden de claves", () => {
     expect(canonical({ b: 2, a: 1 })).toBe('{"a":1,"b":2}');
